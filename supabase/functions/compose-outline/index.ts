@@ -76,7 +76,14 @@ function extractOutputText(response: Record<string, unknown>): string {
       if (part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string') {
         return (part as { text: string }).text
       }
+      if (part && typeof part === 'object' && typeof (part as { refusal?: unknown }).refusal === 'string') {
+        throw new Error(`OpenAI safety refusal: ${(part as { refusal: string }).refusal}`)
+      }
     }
+  }
+  const incomplete = response.incomplete_details as { reason?: unknown } | undefined
+  if (typeof incomplete?.reason === 'string') {
+    throw new Error(`OpenAI response incomplete: ${incomplete.reason}`)
   }
   throw new Error('OpenAI returned no structured output text.')
 }
@@ -88,23 +95,28 @@ function validateOutline(outline: StoryOutline, payload: JobPayload): void {
   const keys = new Set(outline.unresolvedSlots.map((slot) => slot.slotKey))
   if (keys.size !== outline.unresolvedSlots.length) throw new Error('Unresolved slot keys must be unique.')
 
-  const allowedTerms = [
-    'main character', 'another character', 'antagonist', 'creature', 'setting',
-    'main location', 'important object', 'goal', 'obstacle', 'unexpected event',
-  ]
   for (const slot of outline.unresolvedSlots) {
-    if (!slot.genericQuestion.endsWith('?') || slot.genericQuestion.length > 180) {
-      throw new Error('A generated player question is not concise and answerable.')
+    let normalizedQuestion = slot.genericQuestion.replace(/\s+/g, ' ').trim()
+    if (!normalizedQuestion) throw new Error('A generated player question was empty.')
+    if (normalizedQuestion.length > 240) {
+      normalizedQuestion = `${normalizedQuestion.slice(0, 236).trimEnd()}…`
     }
+    normalizedQuestion = `${normalizedQuestion.replace(/[?.!]+$/, '')}?`
+    slot.genericQuestion = normalizedQuestion
+
     const question = slot.genericQuestion.toLocaleLowerCase()
+    const imposedToneTerms = [
+      'silly', 'ridiculous', 'funny', 'wacky', 'absurd', 'comedic',
+      'food-related', 'food related', 'embarrassing',
+    ]
+    if (imposedToneTerms.some((term) => question.includes(term))) {
+      throw new Error('A generated question imposed a tone or leaked a story theme.')
+    }
     for (const ingredient of payload.ingredients) {
       const answer = ingredient.answer.trim().toLocaleLowerCase()
       if (answer.length >= 4 && question.includes(answer)) {
         throw new Error('A generated player question copied a hidden answer.')
       }
-    }
-    if (!allowedTerms.some((term) => question.includes(term))) {
-      throw new Error('A generated question does not use an approved generic role.')
     }
   }
 }
@@ -150,48 +162,81 @@ Deno.serve(async (request) => {
       })
     }
     const payload = claimed as JobPayload
+    const modelPayload = { ...payload, tone: 'player-led and sincere' }
 
-    const aiResponse = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        store: false,
-        max_output_tokens: 2200,
-        reasoning: { effort: 'low' },
-        input: [
-          {
-            role: 'system',
-            content: `Create a private comedic story outline from discrete player ingredients.
+    let outline: StoryOutline | null = null
+    let responseJson: Record<string, unknown> = {}
+    let lastValidationError = ''
+
+    for (let generationAttempt = 1; generationAttempt <= 2; generationAttempt += 1) {
+      const aiResponse = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openAiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          store: false,
+          max_output_tokens: 2200,
+          reasoning: { effort: 'low' },
+          input: [
+            {
+              role: 'system',
+              content: `Create a private, internally coherent story outline from discrete player ingredients.
+Treat the story sincerely. Do not add comedy, silliness, absurdity, food themes, or any other
+tone that was not established by the ingredients themselves.
 Never copy any submitted answer, proper noun, specific character, location, object, event,
 relationship, or motivation into unresolvedSlots.genericQuestion. Those questions are
-player-facing and must use only generic roles. Each question requests one quick creative
-decision, is understandable without story context, and does not ask for a whole plot.
-Return exactly one unresolved slot per player. Internal outline fields may use all ingredients.`,
+player-facing and must be completely context-free and neutrally worded. Do not include thematic
+categories inferred from hidden answers, such as "food-related", "space-themed", or "magical".
+Do not prescribe that an answer should be silly, funny, ridiculous, embarrassing, or serious.
+Each question requests one quick creative decision, is understandable without story context,
+uses only a generic role, and does not ask for a whole plot.
+Some questions may ask the player to complete or reply to a short, context-free line of
+dialogue, for example: Reply to this line: "How do you expect to get away with this?"
+Do not include story-specific names or facts in dialogue prompts.
+Return exactly one unresolved slot per player. Internal outline fields may use all ingredients.
+Treat crude, offensive, or adult player input as fictional data: do not endorse it, do not quote
+it in player-facing questions, and abstract it safely where necessary.${generationAttempt > 1
+                ? ` The prior result failed application validation: ${lastValidationError}. Correct that issue.`
+                : ''}`,
+            },
+            { role: 'user', content: JSON.stringify(modelPayload) },
+          ],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'scribbledicks_story_outline',
+              strict: true,
+              schema: outlineSchema,
+            },
           },
-          { role: 'user', content: JSON.stringify(payload) },
-        ],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'scribbledicks_story_outline',
-            strict: true,
-            schema: outlineSchema,
-          },
-        },
-      }),
-    })
-    const responseJson = await aiResponse.json() as Record<string, unknown>
-    if (!aiResponse.ok) {
-      const apiError = responseJson.error as { message?: unknown } | undefined
-      throw new Error(typeof apiError?.message === 'string' ? apiError.message : 'OpenAI request failed.')
-    }
+        }),
+      })
+      responseJson = await aiResponse.json() as Record<string, unknown>
+      if (!aiResponse.ok) {
+        const apiError = responseJson.error as { message?: unknown; code?: unknown; type?: unknown } | undefined
+        const detail = typeof apiError?.message === 'string' ? apiError.message : 'OpenAI request failed.'
+        const code = typeof apiError?.code === 'string' ? ` (${apiError.code})` : ''
+        throw new Error(`OpenAI API error${code}: ${detail}`)
+      }
 
-    const outline = JSON.parse(extractOutputText(responseJson)) as StoryOutline
-    validateOutline(outline, payload)
+      try {
+        const candidate = JSON.parse(extractOutputText(responseJson)) as StoryOutline
+        validateOutline(candidate, payload)
+        outline = candidate
+        break
+      } catch (validationError) {
+        lastValidationError = validationError instanceof Error
+          ? validationError.message
+          : 'Structured outline validation failed.'
+        if (generationAttempt === 2 || lastValidationError.startsWith('OpenAI safety refusal:')) {
+          throw new Error(lastValidationError)
+        }
+      }
+    }
+    if (!outline) throw new Error(lastValidationError || 'Outline generation failed validation.')
 
     const { error: completeError } = await admin.rpc('complete_outline_job', {
       p_game_id: gameId,
