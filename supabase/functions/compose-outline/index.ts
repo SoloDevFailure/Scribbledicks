@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.111.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -144,6 +144,7 @@ Deno.serve(async (request) => {
   })
 
   let gameId = ''
+  let claimedJob = false
   try {
     const body = await request.json() as { gameId?: unknown; playerToken?: unknown }
     if (typeof body.gameId !== 'string' || typeof body.playerToken !== 'string') {
@@ -161,6 +162,7 @@ Deno.serve(async (request) => {
         status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+    claimedJob = true
     const payload = claimed as JobPayload
     const modelPayload = { ...payload, tone: 'player-led and sincere' }
 
@@ -251,7 +253,7 @@ it in player-facing questions, and abstract it safely where necessary.${generati
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Outline generation failed.'
-    if (gameId) {
+    if (gameId && claimedJob) {
       await admin.rpc('fail_outline_job', { p_game_id: gameId, p_error: message })
     }
     console.error('compose-outline failed', { gameId, message })

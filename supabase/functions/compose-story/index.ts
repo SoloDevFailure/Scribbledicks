@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.111.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -103,6 +103,7 @@ Deno.serve(async (request) => {
   })
 
   let gameId = ''
+  let claimedJob = false
   try {
     const body = await request.json() as { gameId?: unknown; playerToken?: unknown }
     if (typeof body.gameId !== 'string' || typeof body.playerToken !== 'string') {
@@ -114,6 +115,7 @@ Deno.serve(async (request) => {
     })
     if (claimError) throw claimError
     if (!data) return Response.json({ status: 'already_claimed' }, { status: 202, headers: corsHeaders })
+    claimedJob = true
     const payload = data as StoryPayload
 
     let story: FinalStory | null = null
@@ -173,7 +175,7 @@ characters, action, setting, and important objects, but no camera jargon.${corre
     return Response.json({ status: 'completed' }, { headers: corsHeaders })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Story generation failed.'
-    if (gameId) await admin.rpc('fail_story_job', { p_game_id: gameId, p_error: message })
+    if (gameId && claimedJob) await admin.rpc('fail_story_job', { p_game_id: gameId, p_error: message })
     console.error('compose-story failed', { gameId, message })
     return Response.json({ error: message }, { status: 500, headers: corsHeaders })
   }
