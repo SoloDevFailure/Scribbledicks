@@ -26,7 +26,7 @@ alter table public.ai_jobs add constraint ai_jobs_job_type_check check (
   job_type in ('compose_outline','compose_story')
 );
 
-create table public.final_stories (
+create table if not exists public.final_stories (
   id uuid primary key default gen_random_uuid(),
   game_session_id uuid not null unique references public.game_sessions(id) on delete cascade,
   structured_story jsonb not null,
