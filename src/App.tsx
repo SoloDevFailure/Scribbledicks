@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FocusEvent, type FormEvent } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
+  abandonGame,
   checkGameProgress,
   createRoom,
   fetchGameState,
@@ -209,6 +210,7 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
   const [room, setRoom] = useState<Room | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [game, setGame] = useState<GameState | null>(null)
+  const [outlineRequestError, setOutlineRequestError] = useState('')
   const [connection, setConnection] = useState<ConnectionStatus>('connecting')
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -274,9 +276,13 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
 
   useEffect(() => {
     if (!game || game.phase !== 'composing_outline') return
+    setOutlineRequestError('')
     void requestOutline(session, game.gameId)
       .then(() => refresh())
-      .catch(() => refresh())
+      .catch(() => {
+        setOutlineRequestError('The outline service could not be reached. Check that the Supabase Edge Function is deployed, then try again.')
+        return refresh()
+      })
   }, [game?.gameId, game?.phase, refresh, session])
 
   const handleStart = async () => {
@@ -317,6 +323,7 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
         game={game}
         session={session}
         error={error}
+        outlineRequestError={outlineRequestError}
         onRefresh={refresh}
         onLeave={handleLeave}
       />
@@ -380,18 +387,21 @@ function GameScreen({
   game,
   session,
   error,
+  outlineRequestError,
   onRefresh,
   onLeave,
 }: {
   game: GameState
   session: Session
   error: string
+  outlineRequestError: string
   onRefresh: () => Promise<void>
   onLeave: () => Promise<void>
 }) {
   const [answer, setAnswer] = useState(game.answerText ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [remaining, setRemaining] = useState(() => secondsRemaining(game.phaseDeadlineAt))
   const [localError, setLocalError] = useState('')
 
@@ -444,6 +454,36 @@ function GameScreen({
     }
   }
 
+  const retryOutlineRequest = async () => {
+    setRetrying(true)
+    setLocalError('')
+    try {
+      await requestOutline(session, game.gameId)
+      await onRefresh()
+    } catch {
+      setLocalError('The outline service is still unavailable. Confirm that compose-outline is deployed in Supabase.')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  const hardReset = async () => {
+    const confirmed = window.confirm(
+      game.isHost
+        ? 'Close this failed game and return to the start screen? Everyone will need to join a new room.'
+        : 'Clear this game from this device and return to the start screen?',
+    )
+    if (!confirmed) return
+    setResetting(true)
+    setLocalError('')
+    try {
+      if (game.isHost) await abandonGame(session, game.gameId)
+    } catch {
+      // A hard reset must still recover this device if server cleanup fails.
+    }
+    await onLeave()
+  }
+
   const shownError = localError || error
   if (game.phase === 'composing_outline') {
     return (
@@ -451,8 +491,19 @@ function GameScreen({
         <div className="film-reel" aria-hidden="true">✦</div>
         <span className="eyebrow">Please remain dramatically seated</span>
         <h2>The director is trying to make sense of your terrible ideas…</h2>
-        <p>Everyone’s answers are locked in. This usually takes a moment.</p>
-        <div className="loading-dots" aria-label="Composing outline"><i /><i /><i /></div>
+        {outlineRequestError || localError ? (
+          <>
+            <p className="error-message" role="alert">{localError || outlineRequestError}</p>
+            <button className="button button-primary" disabled={retrying} onClick={() => void retryOutlineRequest()}>
+              {retrying ? 'Trying again…' : 'Try again'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Everyone’s answers are locked in. This usually takes a moment.</p>
+            <div className="loading-dots" aria-label="Composing outline"><i /><i /><i /></div>
+          </>
+        )}
       </section>
     )
   }
@@ -482,6 +533,9 @@ function GameScreen({
         ) : (
           <div className="waiting-message"><i /><span>Waiting for the host…</span></div>
         )}
+        <button className="button reset-button" disabled={resetting} onClick={() => void hardReset()}>
+          {resetting ? 'Resetting…' : 'Hard reset game'}
+        </button>
       </section>
     )
   }

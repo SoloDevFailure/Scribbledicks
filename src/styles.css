@@ -245,6 +245,11 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .loading-dots i:nth-child(2) { animation-delay: .2s; }
 .loading-dots i:nth-child(3) { animation-delay: .4s; }
 .completion-stage .button, .error-stage .button { width: 100%; margin-top: 18px; }
+.reset-button {
+  background: transparent;
+  color: #8a3447;
+  border-color: #b86b7b;
+}
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }

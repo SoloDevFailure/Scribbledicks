@@ -136,6 +136,14 @@ export async function retryOutline(session: Session, gameId: string): Promise<vo
   if (error) throw error
 }
 
+export async function abandonGame(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('abandon_game', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+}
+
 export async function leaveRoom(session: Session): Promise<void> {
   const { error } = await requireClient().rpc('leave_room', {
     p_room_id: session.roomId,
