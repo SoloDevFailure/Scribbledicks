@@ -1,0 +1,4 @@
+project_id = "scribbledicks"
+
+[functions.compose-outline]
+verify_jwt = false

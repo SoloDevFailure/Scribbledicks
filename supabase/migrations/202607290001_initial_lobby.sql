@@ -119,7 +119,8 @@ begin
   begin
     insert into public.players (room_id, name, client_token)
     values (target_room.id, btrim(p_player_name), p_player_token)
-    on conflict (room_id, client_token) do update set last_seen_at = now()
+    on conflict on constraint players_room_id_client_token_key
+    do update set last_seen_at = now()
     returning * into joined_player;
   exception when unique_violation then
     raise exception 'NAME_TAKEN';
