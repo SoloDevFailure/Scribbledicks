@@ -273,16 +273,25 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
       void heartbeat(session).catch(() => setConnection('disconnected'))
     }, 25_000)
     const authorityTimer = window.setInterval(() => void refresh(), 3_000)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    window.addEventListener('focus', refreshWhenVisible)
+    window.addEventListener('online', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     return () => {
       window.clearInterval(heartbeatTimer)
       window.clearInterval(authorityTimer)
+      window.removeEventListener('focus', refreshWhenVisible)
+      window.removeEventListener('online', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
       if (channel && supabase) void supabase.removeChannel(channel)
     }
   }, [refresh, session])
 
   useEffect(() => {
-    if (!game || game.phase !== 'composing_outline') return
+    if (!game || !game.isHost || game.phase !== 'composing_outline') return
     setOutlineRequestError('')
     void requestOutline(session, game.gameId)
       .then(() => refresh())
@@ -290,10 +299,10 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
         setOutlineRequestError('The outline service could not be reached. Check that the Supabase Edge Function is deployed, then try again.')
         return refresh()
       })
-  }, [game?.gameId, game?.phase, refresh, session])
+  }, [game?.gameId, game?.isHost, game?.phase, refresh, session])
 
   useEffect(() => {
-    if (!game || game.phase !== 'composing_story') return
+    if (!game || !game.isHost || game.phase !== 'composing_story') return
     setOutlineRequestError('')
     void requestStory(session, game.gameId)
       .then(() => refresh())
@@ -301,7 +310,7 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
         setOutlineRequestError('The story service could not be reached. Check that the compose-story Edge Function is deployed, then try again.')
         return refresh()
       })
-  }, [game?.gameId, game?.phase, refresh, session])
+  }, [game?.gameId, game?.isHost, game?.phase, refresh, session])
 
   const handleStart = async () => {
     setStarting(true)
@@ -617,6 +626,10 @@ function GameScreen({
           <strong>Answer submitted</strong>
           <p>{game.answerText}</p>
           <span>Waiting for everyone else. Your answer is locked.</span>
+          {shownError && <p className="error-message" role="alert">{shownError}</p>}
+          <button className="button button-secondary" type="button" onClick={() => void onRefresh()}>
+            Check for updates
+          </button>
         </div>
       ) : (
         <form className="answer-form" onSubmit={submit}>
