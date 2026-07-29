@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FocusEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FocusEvent, type FormEvent } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
   abandonGame,
@@ -26,6 +26,7 @@ import type { GameState, Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
+const APP_BUILD = '2026.07.29.2'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
@@ -49,6 +50,7 @@ export default function App() {
       ) : (
         <Landing onEnter={enterLobby} />
       )}
+      <span className="build-version">Build {APP_BUILD}</span>
     </main>
   )
 }
@@ -219,26 +221,39 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const refreshInFlight = useRef(false)
+  const refreshQueued = useRef(false)
 
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) {
+      refreshQueued.current = true
+      return
+    }
+    refreshInFlight.current = true
     try {
-      const [nextRoom, nextPlayers] = await Promise.all([
-        fetchRoom(session.roomId),
-        fetchPlayers(session.roomId),
-      ])
-      setRoom(nextRoom)
-      setPlayers(nextPlayers)
-      if (nextRoom.status === 'closed') {
-        onExit()
-        return
-      }
-      if (nextRoom.status === 'started') {
-        setGame(await fetchGameState(session))
-      }
-      setError('')
-    } catch (refreshError) {
-      setError(friendlyError(refreshError))
+      do {
+        refreshQueued.current = false
+        try {
+          const [nextRoom, nextPlayers] = await Promise.all([
+            fetchRoom(session.roomId),
+            fetchPlayers(session.roomId),
+          ])
+          setRoom(nextRoom)
+          setPlayers(nextPlayers)
+          if (nextRoom.status === 'closed') {
+            onExit()
+            return
+          }
+          if (nextRoom.status === 'started') {
+            setGame(await fetchGameState(session))
+          }
+          setError('')
+        } catch (refreshError) {
+          setError(friendlyError(refreshError))
+        }
+      } while (refreshQueued.current)
     } finally {
+      refreshInFlight.current = false
       setLoading(false)
     }
   }, [onExit, session])
@@ -272,7 +287,7 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
     const heartbeatTimer = window.setInterval(() => {
       void heartbeat(session).catch(() => setConnection('disconnected'))
     }, 25_000)
-    const authorityTimer = window.setInterval(() => void refresh(), 3_000)
+    const authorityTimer = window.setInterval(() => void refresh(), 2_000)
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void refresh()
     }

@@ -14,6 +14,17 @@ html { min-height: 100%; scroll-padding-bottom: 40vh; }
 body { margin: 0; min-width: 320px; min-height: 100vh; min-height: 100dvh; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
+.build-version {
+  position: fixed;
+  right: 8px;
+  bottom: 6px;
+  z-index: 2;
+  color: rgba(32, 29, 43, .48);
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
 
 .app-shell {
   min-height: 100vh;
