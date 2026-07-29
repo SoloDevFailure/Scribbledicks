@@ -30,15 +30,15 @@ type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
 
-  const enterLobby = (next: Session) => {
+  const enterLobby = useCallback((next: Session) => {
     saveSession(next)
     setSession(next)
-  }
+  }, [])
 
-  const exitLobby = () => {
+  const exitLobby = useCallback(() => {
     clearSession()
     setSession(null)
-  }
+  }, [])
 
   return (
     <main className="app-shell">
@@ -228,6 +228,10 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
       ])
       setRoom(nextRoom)
       setPlayers(nextPlayers)
+      if (nextRoom.status === 'closed') {
+        onExit()
+        return
+      }
       if (nextRoom.status === 'started') {
         setGame(await fetchGameState(session))
       }
@@ -237,7 +241,7 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
     } finally {
       setLoading(false)
     }
-  }, [session.roomId])
+  }, [onExit, session])
 
   useEffect(() => {
     void refresh()
@@ -496,7 +500,7 @@ function GameScreen({
   const hardReset = async () => {
     const confirmed = window.confirm(
       game.isHost
-        ? 'Close this failed game and return to the start screen? Everyone will need to join a new room.'
+        ? 'End this game and return everyone to the start screen? A new room will need to be created.'
         : 'Clear this game from this device and return to the start screen?',
     )
     if (!confirmed) return
@@ -510,11 +514,26 @@ function GameScreen({
     await onLeave()
   }
 
+  const hostControls = game.isHost ? (
+    <div className="host-controls" role="group" aria-label="Host controls">
+      <span>Host controls</span>
+      <button
+        className="host-reset-button"
+        type="button"
+        disabled={resetting}
+        onClick={() => void hardReset()}
+      >
+        {resetting ? 'Resetting…' : 'End & reset game'}
+      </button>
+    </div>
+  ) : null
+
   const shownError = localError || error
   if (game.phase === 'composing_outline' || game.phase === 'composing_story') {
     const composingStory = game.phase === 'composing_story'
     return (
       <section className="card game-card loading-stage">
+        {hostControls}
         <div className="film-reel" aria-hidden="true">✦</div>
         <span className="eyebrow">Please remain dramatically seated</span>
         <h2>{composingStory ? 'The director is cutting this mess down to ninety seconds…' : 'The director is trying to make sense of your terrible ideas…'}</h2>
@@ -538,6 +557,7 @@ function GameScreen({
   if (game.phase === 'story_complete' && game.story) {
     return (
       <section className="card game-card story-stage">
+        {hostControls}
         <span className="eyebrow">Somehow, that made a story</span>
         <h2>{game.story.title}</h2>
         <p className="story-duration">About {game.story.estimatedDurationSeconds} seconds · {game.story.panels.length} panels</p>
@@ -562,6 +582,7 @@ function GameScreen({
   if (game.phase === 'error') {
     return (
       <section className="card game-card error-stage">
+        {hostControls}
         <span className="eyebrow">Technical intermission</span>
         <h2>The director dropped the script.</h2>
         <p>{game.isHost ? game.aiError || 'Outline generation failed.' : 'The host can retry without losing anyone’s answers.'}</p>
@@ -573,9 +594,6 @@ function GameScreen({
         ) : (
           <div className="waiting-message"><i /><span>Waiting for the host…</span></div>
         )}
-        <button className="button reset-button" disabled={resetting} onClick={() => void hardReset()}>
-          {resetting ? 'Resetting…' : 'Hard reset game'}
-        </button>
       </section>
     )
   }
@@ -584,6 +602,7 @@ function GameScreen({
   const followup = game.phase === 'followup_questions'
   return (
     <section className="card game-card question-stage">
+      {hostControls}
       <div className="question-topbar">
         <span className="status status-connected"><i /> {followup ? 'Just need some specifics' : 'Private question'}</span>
         <span className={`countdown ${remaining <= 10 ? 'countdown-urgent' : ''}`}>{remaining}s</span>

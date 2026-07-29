@@ -224,6 +224,38 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .progress-track i { display: block; height: 100%; background: #8ee4cf; transition: width .25s ease; }
 .answer-progress { margin: 7px 0 24px; color: #6c667b; font-size: .75rem; text-align: right; }
 .question-stage h2 { margin: 0 0 24px; font-size: clamp(1.4rem, 6vw, 2rem); line-height: 1.25; }
+.host-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 9px 10px 9px 14px;
+  border: 2px dashed rgba(36, 31, 55, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+.host-controls > span {
+  color: #6c667b;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.host-reset-button {
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffe0e7;
+  color: #9f2945;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.host-reset-button:hover:not(:disabled) { background: #ffcbd7; }
+.host-reset-button:disabled { cursor: wait; opacity: .65; }
 .answer-form { display: grid; gap: 12px; }
 .character-count { margin-top: -7px; color: #8b8498; font-size: .72rem; text-align: right; }
 .submitted-state {
