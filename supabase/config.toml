@@ -2,3 +2,6 @@ project_id = "scribbledicks"
 
 [functions.compose-outline]
 verify_jwt = false
+
+[functions.compose-story]
+verify_jwt = false
