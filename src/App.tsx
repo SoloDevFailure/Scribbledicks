@@ -26,7 +26,7 @@ import type { GameState, Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-const APP_BUILD = '2026.07.29.2'
+const APP_BUILD = '2026.07.29.3'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
@@ -618,6 +618,20 @@ function GameScreen({
         ) : (
           <div className="waiting-message"><i /><span>Waiting for the host…</span></div>
         )}
+      </section>
+    )
+  }
+
+  if (game.phase !== 'opening_questions' && game.phase !== 'followup_questions') {
+    return (
+      <section className="card game-card error-stage">
+        {hostControls}
+        <span className="eyebrow">Database update required</span>
+        <h2>This game reached an unsupported phase.</h2>
+        <p>
+          Supabase returned <strong>{String(game.phase)}</strong>. Run the latest SQL migration,
+          then reset this game and create a new room.
+        </p>
       </section>
     )
   }
