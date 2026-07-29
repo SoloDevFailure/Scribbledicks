@@ -13,9 +13,12 @@ import {
   joinRoom,
   leaveRoom,
   requestOutline,
+  requestStory,
   retryOutline,
+  retryStory,
   startRoom,
   submitOpeningAnswer,
+  submitFollowupAnswer,
 } from './lib/lobby'
 import { clearSession, loadSession, saveSession } from './lib/session'
 import { isSupabaseConfigured, supabase, supabaseConfigError } from './lib/supabase'
@@ -285,6 +288,17 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
       })
   }, [game?.gameId, game?.phase, refresh, session])
 
+  useEffect(() => {
+    if (!game || game.phase !== 'composing_story') return
+    setOutlineRequestError('')
+    void requestStory(session, game.gameId)
+      .then(() => refresh())
+      .catch(() => {
+        setOutlineRequestError('The story service could not be reached. Check that the compose-story Edge Function is deployed, then try again.')
+        return refresh()
+      })
+  }, [game?.gameId, game?.phase, refresh, session])
+
   const handleStart = async () => {
     setStarting(true)
     setError('')
@@ -408,7 +422,7 @@ function GameScreen({
   useEffect(() => setAnswer(game.answerText ?? ''), [game.answerText])
 
   useEffect(() => {
-    if (game.phase !== 'opening_questions') return
+    if (game.phase !== 'opening_questions' && game.phase !== 'followup_questions') return
     const update = () => {
       const seconds = secondsRemaining(game.phaseDeadlineAt)
       setRemaining(seconds)
@@ -432,7 +446,11 @@ function GameScreen({
     setSubmitting(true)
     setLocalError('')
     try {
-      await submitOpeningAnswer(session, game.gameId, answer)
+      if (game.phase === 'followup_questions') {
+        await submitFollowupAnswer(session, game.gameId, answer)
+      } else {
+        await submitOpeningAnswer(session, game.gameId, answer)
+      }
       await onRefresh()
     } catch (submitError) {
       setLocalError(friendlyError(submitError))
@@ -445,7 +463,11 @@ function GameScreen({
     setRetrying(true)
     setLocalError('')
     try {
-      await retryOutline(session, game.gameId)
+      if (game.aiJobType === 'compose_story') {
+        await retryStory(session, game.gameId)
+      } else {
+        await retryOutline(session, game.gameId)
+      }
       await onRefresh()
     } catch (retryError) {
       setLocalError(friendlyError(retryError))
@@ -458,10 +480,14 @@ function GameScreen({
     setRetrying(true)
     setLocalError('')
     try {
-      await requestOutline(session, game.gameId)
+      if (game.phase === 'composing_story') {
+        await requestStory(session, game.gameId)
+      } else {
+        await requestOutline(session, game.gameId)
+      }
       await onRefresh()
     } catch {
-      setLocalError('The outline service is still unavailable. Confirm that compose-outline is deployed in Supabase.')
+      setLocalError(`The ${game.phase === 'composing_story' ? 'story' : 'outline'} service is still unavailable. Confirm that the Edge Function is deployed in Supabase.`)
     } finally {
       setRetrying(false)
     }
@@ -485,12 +511,13 @@ function GameScreen({
   }
 
   const shownError = localError || error
-  if (game.phase === 'composing_outline') {
+  if (game.phase === 'composing_outline' || game.phase === 'composing_story') {
+    const composingStory = game.phase === 'composing_story'
     return (
       <section className="card game-card loading-stage">
         <div className="film-reel" aria-hidden="true">✦</div>
         <span className="eyebrow">Please remain dramatically seated</span>
-        <h2>The director is trying to make sense of your terrible ideas…</h2>
+        <h2>{composingStory ? 'The director is cutting this mess down to ninety seconds…' : 'The director is trying to make sense of your terrible ideas…'}</h2>
         {outlineRequestError || localError ? (
           <>
             <p className="error-message" role="alert">{localError || outlineRequestError}</p>
@@ -500,20 +527,33 @@ function GameScreen({
           </>
         ) : (
           <>
-            <p>Everyone’s answers are locked in. This usually takes a moment.</p>
-            <div className="loading-dots" aria-label="Composing outline"><i /><i /><i /></div>
+            <p>{composingStory ? 'Turning everyone’s contributions into scenes, dialogue, and drawing instructions.' : 'Everyone’s answers are locked in. This usually takes a moment.'}</p>
+            <div className="loading-dots" aria-label={composingStory ? 'Composing story' : 'Composing outline'}><i /><i /><i /></div>
           </>
         )}
       </section>
     )
   }
 
-  if (game.phase === 'opening_complete') {
+  if (game.phase === 'story_complete' && game.story) {
     return (
-      <section className="card game-card completion-stage">
-        <span className="eyebrow">Opening round complete</span>
-        <h2>Somehow, that made a story.</h2>
-        <p>The private outline is safely backstage, ready for the next gameplay wave.</p>
+      <section className="card game-card story-stage">
+        <span className="eyebrow">Somehow, that made a story</span>
+        <h2>{game.story.title}</h2>
+        <p className="story-duration">About {game.story.estimatedDurationSeconds} seconds · {game.story.panels.length} panels</p>
+        <ol className="story-panels">
+          {game.story.panels.map((panel) => (
+            <li key={panel.panelNumber}>
+              <span className="panel-number">Panel {panel.panelNumber}</span>
+              <p>{panel.narration}</p>
+              {panel.dialogue && <blockquote>“{panel.dialogue}”</blockquote>}
+              <div className="drawing-caption">
+                <strong>Drawing caption</strong>
+                <span>{panel.drawingCaption}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
         <button className="button button-secondary" onClick={() => void onLeave()}>Leave game</button>
       </section>
     )
@@ -528,7 +568,7 @@ function GameScreen({
         {shownError && <p className="error-message" role="alert">{shownError}</p>}
         {game.isHost && game.aiAttemptCount < 3 ? (
           <button className="button button-primary" disabled={retrying} onClick={() => void retry()}>
-            {retrying ? 'Retrying…' : 'Retry outline'}
+            {retrying ? 'Retrying…' : `Retry ${game.aiJobType === 'compose_story' ? 'story' : 'outline'}`}
           </button>
         ) : (
           <div className="waiting-message"><i /><span>Waiting for the host…</span></div>
@@ -541,10 +581,11 @@ function GameScreen({
   }
 
   const submitted = Boolean(game.submittedAt)
+  const followup = game.phase === 'followup_questions'
   return (
     <section className="card game-card question-stage">
       <div className="question-topbar">
-        <span className="status status-connected"><i /> Private question</span>
+        <span className="status status-connected"><i /> {followup ? 'Just need some specifics' : 'Private question'}</span>
         <span className={`countdown ${remaining <= 10 ? 'countdown-urgent' : ''}`}>{remaining}s</span>
       </div>
       <div className="progress-track" aria-label={`${game.answerCount} of ${game.playerCount} answered`}>

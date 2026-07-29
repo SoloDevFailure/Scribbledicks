@@ -30,8 +30,23 @@ export type GamePhase =
   | 'lobby'
   | 'opening_questions'
   | 'composing_outline'
-  | 'opening_complete'
+  | 'followup_questions'
+  | 'composing_story'
+  | 'story_complete'
   | 'error'
+
+export interface StoryPanel {
+  panelNumber: number
+  narration: string
+  dialogue: string | null
+  drawingCaption: string
+}
+
+export interface FinalStory {
+  title: string
+  estimatedDurationSeconds: number
+  panels: StoryPanel[]
+}
 
 export interface GameState {
   gameId: string
@@ -46,6 +61,8 @@ export interface GameState {
   submittedAt: string | null
   answerText: string | null
   aiJobStatus: 'pending' | 'running' | 'completed' | 'failed' | null
+  aiJobType: 'compose_outline' | 'compose_story' | null
   aiError: string | null
   aiAttemptCount: number
+  story: FinalStory | null
 }

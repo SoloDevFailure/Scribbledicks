@@ -113,6 +113,20 @@ export async function submitOpeningAnswer(
   return data as GameState
 }
 
+export async function submitFollowupAnswer(
+  session: Session,
+  gameId: string,
+  answer: string,
+): Promise<GameState> {
+  const { data, error } = await requireClient().rpc('submit_followup_answer', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+    p_answer_text: answer,
+  })
+  if (error) throw error
+  return data as GameState
+}
+
 export async function checkGameProgress(session: Session, gameId: string): Promise<void> {
   const { error } = await requireClient().rpc('check_game_progress', {
     p_game_id: gameId,
@@ -128,8 +142,23 @@ export async function requestOutline(session: Session, gameId: string): Promise<
   if (error) throw error
 }
 
+export async function requestStory(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().functions.invoke('compose-story', {
+    body: { gameId, playerToken: session.playerToken },
+  })
+  if (error) throw error
+}
+
 export async function retryOutline(session: Session, gameId: string): Promise<void> {
   const { error } = await requireClient().rpc('retry_outline_job', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+}
+
+export async function retryStory(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('retry_story_job', {
     p_game_id: gameId,
     p_player_token: session.playerToken,
   })
