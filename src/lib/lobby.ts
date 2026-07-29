@@ -48,6 +48,18 @@ export async function joinRoom(name: string, code: string): Promise<Session> {
   return toSession(data, playerToken)
 }
 
+export async function fetchOpenRooms(): Promise<Room[]> {
+  const { data, error } = await requireClient()
+    .from('rooms')
+    .select('id, code, status, created_at, started_at')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(10)
+    .returns<Room[]>()
+  if (error) throw error
+  return data
+}
+
 export async function fetchRoom(roomId: string): Promise<Room> {
   const { data, error } = await requireClient()
     .from('rooms')
@@ -94,7 +106,23 @@ export async function heartbeat(session: Session): Promise<void> {
 }
 
 export function friendlyError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
+  let message = ''
+  if (error instanceof Error) {
+    message = error.message
+  } else if (typeof error === 'string') {
+    message = error
+  } else if (error && typeof error === 'object') {
+    const structured = error as {
+      message?: unknown
+      details?: unknown
+      hint?: unknown
+      code?: unknown
+    }
+    const parts = [structured.message, structured.details, structured.hint]
+      .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    message = parts.join(' ')
+    if (!message && typeof structured.code === 'string') message = structured.code
+  }
   if (message.includes('ROOM_NOT_FOUND')) return 'That room code does not exist.'
   if (message.includes('ROOM_NOT_OPEN')) return 'That room is no longer open.'
   if (message.includes('NAME_TAKEN')) return 'That name is already taken in this room.'

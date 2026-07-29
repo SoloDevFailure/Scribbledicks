@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FocusEvent, type FormEvent } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
   createRoom,
+  fetchOpenRooms,
   fetchPlayers,
   fetchRoom,
   friendlyError,
@@ -58,6 +59,8 @@ function Landing({ onEnter }: { onEnter: (session: Session) => void }) {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
+  const [openRooms, setOpenRooms] = useState<Room[]>([])
   const [error, setError] = useState('')
 
   const submit = async (event: FormEvent) => {
@@ -80,9 +83,28 @@ function Landing({ onEnter }: { onEnter: (session: Session) => void }) {
     }
   }
 
-  const chooseMode = (next: LandingMode) => {
+  const chooseMode = async (next: LandingMode) => {
     setMode(next)
     setError('')
+    if (next !== 'join' || !isSupabaseConfigured) return
+
+    setDiscovering(true)
+    try {
+      const rooms = await fetchOpenRooms()
+      setOpenRooms(rooms)
+      if (rooms.length === 1 && rooms[0]) setCode(rooms[0].code)
+    } catch (discoveryError) {
+      setError(friendlyError(discoveryError))
+    } finally {
+      setDiscovering(false)
+    }
+  }
+
+  const keepFieldVisible = (event: FocusEvent<HTMLInputElement>) => {
+    const field = event.currentTarget
+    window.setTimeout(() => {
+      field.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 300)
   }
 
   return (
@@ -97,16 +119,16 @@ function Landing({ onEnter }: { onEnter: (session: Session) => void }) {
 
       {mode === 'home' ? (
         <div className="action-stack">
-          <button className="button button-primary" onClick={() => chooseMode('create')}>
+          <button className="button button-primary" onClick={() => void chooseMode('create')}>
             Create game <span aria-hidden="true">→</span>
           </button>
-          <button className="button button-secondary" onClick={() => chooseMode('join')}>
-            Join game
+          <button className="button button-secondary" onClick={() => void chooseMode('join')}>
+            Join game <span aria-hidden="true">⌕</span>
           </button>
         </div>
       ) : (
         <form className="game-form" onSubmit={submit}>
-          <button className="back-button" type="button" onClick={() => chooseMode('home')}>
+          <button className="back-button" type="button" onClick={() => void chooseMode('home')}>
             ← Back
           </button>
           <div>
@@ -121,22 +143,52 @@ function Landing({ onEnter }: { onEnter: (session: Session) => void }) {
               maxLength={28}
               value={name}
               onChange={(event) => setName(event.target.value)}
+              onFocus={keepFieldVisible}
+              enterKeyHint={mode === 'create' ? 'go' : 'next'}
               placeholder="e.g. Jeremy"
             />
           </label>
           {mode === 'join' && (
-            <label>
-              Room code
-              <input
-                className="code-input"
-                autoCapitalize="characters"
-                autoComplete="off"
-                maxLength={5}
-                value={code}
-                onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                placeholder="ABCDE"
-              />
-            </label>
+            <>
+              <div className="room-discovery" aria-live="polite">
+                {discovering ? (
+                  <span>Looking for open games…</span>
+                ) : openRooms.length > 0 ? (
+                  <>
+                    <strong>{openRooms.length === 1 ? 'Open game found' : `${openRooms.length} open games found`}</strong>
+                    <div className="room-choices">
+                      {openRooms.map((room) => (
+                        <button
+                          className={code === room.code ? 'selected' : ''}
+                          key={room.id}
+                          type="button"
+                          onClick={() => setCode(room.code)}
+                        >
+                          {room.code}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <span>No open games found. You can still enter a code below.</span>
+                )}
+              </div>
+              <label>
+                Room code
+                <input
+                  className="code-input"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  inputMode="text"
+                  enterKeyHint="go"
+                  maxLength={5}
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  onFocus={keepFieldVisible}
+                  placeholder="ABCDE"
+                />
+              </label>
+            </>
           )}
           {error && <p className="error-message" role="alert">{error}</p>}
           <button className="button button-primary" disabled={loading || !isSupabaseConfigured}>
