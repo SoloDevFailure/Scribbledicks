@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FocusEvent, type FormEvent } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
+  checkGameProgress,
   createRoom,
+  fetchGameState,
   fetchOpenRooms,
   fetchPlayers,
   fetchRoom,
@@ -9,11 +11,14 @@ import {
   heartbeat,
   joinRoom,
   leaveRoom,
+  requestOutline,
+  retryOutline,
   startRoom,
+  submitOpeningAnswer,
 } from './lib/lobby'
 import { clearSession, loadSession, saveSession } from './lib/session'
 import { isSupabaseConfigured, supabase, supabaseConfigError } from './lib/supabase'
-import type { Player, Room, Session } from './types'
+import type { GameState, Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
@@ -203,6 +208,7 @@ function Landing({ onEnter }: { onEnter: (session: Session) => void }) {
 function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
   const [room, setRoom] = useState<Room | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
+  const [game, setGame] = useState<GameState | null>(null)
   const [connection, setConnection] = useState<ConnectionStatus>('connecting')
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -217,6 +223,9 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
       ])
       setRoom(nextRoom)
       setPlayers(nextPlayers)
+      if (nextRoom.status === 'started') {
+        setGame(await fetchGameState(session))
+      }
       setError('')
     } catch (refreshError) {
       setError(friendlyError(refreshError))
@@ -254,12 +263,21 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
     const heartbeatTimer = window.setInterval(() => {
       void heartbeat(session).catch(() => setConnection('disconnected'))
     }, 25_000)
+    const authorityTimer = window.setInterval(() => void refresh(), 3_000)
 
     return () => {
       window.clearInterval(heartbeatTimer)
+      window.clearInterval(authorityTimer)
       if (channel && supabase) void supabase.removeChannel(channel)
     }
   }, [refresh, session])
+
+  useEffect(() => {
+    if (!game || game.phase !== 'composing_outline') return
+    void requestOutline(session, game.gameId)
+      .then(() => refresh())
+      .catch(() => refresh())
+  }, [game?.gameId, game?.phase, refresh, session])
 
   const handleStart = async () => {
     setStarting(true)
@@ -291,6 +309,18 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
 
   if (loading) {
     return <section className="card lobby-card"><div className="loader" /><p className="centered">Opening the lobby…</p></section>
+  }
+
+  if (game) {
+    return (
+      <GameScreen
+        game={game}
+        session={session}
+        error={error}
+        onRefresh={refresh}
+        onLeave={handleLeave}
+      />
+    )
   }
 
   return (
@@ -336,7 +366,7 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
           <span>The first round is coming in the next milestone.</span>
         </div>
       ) : session.isHost ? (
-        <button className="button button-primary" onClick={handleStart} disabled={starting || players.length < 1}>
+        <button className="button button-primary" onClick={handleStart} disabled={starting || players.length < 3}>
           {starting ? 'Starting…' : 'Start game'} <span aria-hidden="true">→</span>
         </button>
       ) : (
@@ -344,4 +374,160 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
       )}
     </section>
   )
+}
+
+function GameScreen({
+  game,
+  session,
+  error,
+  onRefresh,
+  onLeave,
+}: {
+  game: GameState
+  session: Session
+  error: string
+  onRefresh: () => Promise<void>
+  onLeave: () => Promise<void>
+}) {
+  const [answer, setAnswer] = useState(game.answerText ?? '')
+  const [submitting, setSubmitting] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const [remaining, setRemaining] = useState(() => secondsRemaining(game.phaseDeadlineAt))
+  const [localError, setLocalError] = useState('')
+
+  useEffect(() => setAnswer(game.answerText ?? ''), [game.answerText])
+
+  useEffect(() => {
+    if (game.phase !== 'opening_questions') return
+    const update = () => {
+      const seconds = secondsRemaining(game.phaseDeadlineAt)
+      setRemaining(seconds)
+      if (seconds === 0) {
+        void checkGameProgress(session, game.gameId)
+          .then(onRefresh)
+          .catch(() => onRefresh())
+      }
+    }
+    update()
+    const timer = window.setInterval(update, 500)
+    return () => window.clearInterval(timer)
+  }, [game.gameId, game.phase, game.phaseDeadlineAt, onRefresh, session])
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!answer.trim()) {
+      setLocalError('Write something first.')
+      return
+    }
+    setSubmitting(true)
+    setLocalError('')
+    try {
+      await submitOpeningAnswer(session, game.gameId, answer)
+      await onRefresh()
+    } catch (submitError) {
+      setLocalError(friendlyError(submitError))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const retry = async () => {
+    setRetrying(true)
+    setLocalError('')
+    try {
+      await retryOutline(session, game.gameId)
+      await onRefresh()
+    } catch (retryError) {
+      setLocalError(friendlyError(retryError))
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  const shownError = localError || error
+  if (game.phase === 'composing_outline') {
+    return (
+      <section className="card game-card loading-stage">
+        <div className="film-reel" aria-hidden="true">✦</div>
+        <span className="eyebrow">Please remain dramatically seated</span>
+        <h2>The director is trying to make sense of your terrible ideas…</h2>
+        <p>Everyone’s answers are locked in. This usually takes a moment.</p>
+        <div className="loading-dots" aria-label="Composing outline"><i /><i /><i /></div>
+      </section>
+    )
+  }
+
+  if (game.phase === 'opening_complete') {
+    return (
+      <section className="card game-card completion-stage">
+        <span className="eyebrow">Opening round complete</span>
+        <h2>Somehow, that made a story.</h2>
+        <p>The private outline is safely backstage, ready for the next gameplay wave.</p>
+        <button className="button button-secondary" onClick={() => void onLeave()}>Leave game</button>
+      </section>
+    )
+  }
+
+  if (game.phase === 'error') {
+    return (
+      <section className="card game-card error-stage">
+        <span className="eyebrow">Technical intermission</span>
+        <h2>The director dropped the script.</h2>
+        <p>{game.isHost ? game.aiError || 'Outline generation failed.' : 'The host can retry without losing anyone’s answers.'}</p>
+        {shownError && <p className="error-message" role="alert">{shownError}</p>}
+        {game.isHost && game.aiAttemptCount < 3 ? (
+          <button className="button button-primary" disabled={retrying} onClick={() => void retry()}>
+            {retrying ? 'Retrying…' : 'Retry outline'}
+          </button>
+        ) : (
+          <div className="waiting-message"><i /><span>Waiting for the host…</span></div>
+        )}
+      </section>
+    )
+  }
+
+  const submitted = Boolean(game.submittedAt)
+  return (
+    <section className="card game-card question-stage">
+      <div className="question-topbar">
+        <span className="status status-connected"><i /> Private question</span>
+        <span className={`countdown ${remaining <= 10 ? 'countdown-urgent' : ''}`}>{remaining}s</span>
+      </div>
+      <div className="progress-track" aria-label={`${game.answerCount} of ${game.playerCount} answered`}>
+        <i style={{ width: `${(game.answerCount / game.playerCount) * 100}%` }} />
+      </div>
+      <p className="answer-progress">{game.answerCount} of {game.playerCount} players have answered</p>
+      <h2>{game.promptText}</h2>
+      {submitted ? (
+        <div className="submitted-state">
+          <strong>Answer submitted</strong>
+          <p>{game.answerText}</p>
+          <span>Waiting for everyone else. Your answer is locked.</span>
+        </div>
+      ) : (
+        <form className="answer-form" onSubmit={submit}>
+          <label>
+            Your answer
+            <textarea
+              autoFocus
+              maxLength={250}
+              value={answer}
+              onChange={(event) => setAnswer(event.target.value)}
+              placeholder="Make it memorable…"
+            />
+          </label>
+          <div className="character-count">{answer.length}/250</div>
+          {shownError && <p className="error-message" role="alert">{shownError}</p>}
+          <button className="button button-primary" disabled={submitting || remaining === 0}>
+            {submitting ? 'Submitting…' : 'Submit answer'}
+          </button>
+        </form>
+      )}
+    </section>
+  )
+}
+
+function secondsRemaining(deadline: string | null): number {
+  if (!deadline) return 0
+  return Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000))
 }

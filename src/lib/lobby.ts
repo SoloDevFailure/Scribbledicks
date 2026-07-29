@@ -1,4 +1,4 @@
-import type { Player, Room, Session } from '../types'
+import type { GameState, Player, Room, Session } from '../types'
 import { createPlayerToken } from './session'
 import { supabase } from './supabase'
 
@@ -81,9 +81,56 @@ export async function fetchPlayers(roomId: string): Promise<Player[]> {
   return data
 }
 
-export async function startRoom(session: Session): Promise<void> {
-  const { error } = await requireClient().rpc('start_room', {
+export async function startRoom(session: Session): Promise<string> {
+  const { data, error } = await requireClient().rpc('start_game', {
     p_room_id: session.roomId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+  return data as string
+}
+
+export async function fetchGameState(session: Session): Promise<GameState> {
+  const { data, error } = await requireClient().rpc('get_game_state', {
+    p_room_id: session.roomId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+  return data as GameState
+}
+
+export async function submitOpeningAnswer(
+  session: Session,
+  gameId: string,
+  answer: string,
+): Promise<GameState> {
+  const { data, error } = await requireClient().rpc('submit_opening_answer', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+    p_answer_text: answer,
+  })
+  if (error) throw error
+  return data as GameState
+}
+
+export async function checkGameProgress(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('check_game_progress', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+}
+
+export async function requestOutline(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().functions.invoke('compose-outline', {
+    body: { gameId, playerToken: session.playerToken },
+  })
+  if (error) throw error
+}
+
+export async function retryOutline(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('retry_outline_job', {
+    p_game_id: gameId,
     p_player_token: session.playerToken,
   })
   if (error) throw error
@@ -129,5 +176,10 @@ export function friendlyError(error: unknown): string {
   if (message.includes('INVALID_NAME')) return 'Enter a name between 1 and 28 characters.'
   if (message.includes('INVALID_CODE')) return 'Enter the 5-character room code.'
   if (message.includes('HOST_ONLY')) return 'Only the host can start the game.'
+  if (message.includes('MIN_PLAYERS_3')) return 'You need at least 3 active players to start.'
+  if (message.includes('INVALID_ANSWER')) return 'Enter an answer between 1 and 250 characters.'
+  if (message.includes('SUBMISSIONS_CLOSED')) return 'Time is up. Your answer was not submitted.'
+  if (message.includes('NOT_PARTICIPANT')) return 'You are not an active participant in this game.'
+  if (message.includes('GAME_NOT_FOUND')) return 'This game session could not be restored.'
   return message || 'Something went wrong. Please try again.'
 }

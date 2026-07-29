@@ -12,7 +12,7 @@
 
 html { min-height: 100%; scroll-padding-bottom: 40vh; }
 body { margin: 0; min-width: 320px; min-height: 100vh; min-height: 100dvh; }
-button, input { font: inherit; }
+button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 
 .app-shell {
@@ -118,6 +118,18 @@ input {
   outline: none;
 }
 input:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
+textarea {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  border: 2px solid #cbc6d3;
+  border-radius: 12px;
+  background: white;
+  padding: 14px;
+  color: #201d2b;
+  outline: none;
+}
+textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .code-input { letter-spacing: .2em; font-weight: 800; text-transform: uppercase; }
 .error-message { color: #b12642 !important; background: #ffe3e8; border-radius: 9px; padding: 10px 12px; font-size: .85rem; margin: 0; }
 
@@ -195,6 +207,44 @@ input:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .doodle { position: absolute; font-family: 'Permanent Marker'; font-size: 4rem; opacity: .15; }
 .doodle-one { top: 5%; left: 5%; transform: rotate(-15deg); }
 .doodle-two { right: 6%; bottom: 5%; transform: rotate(12deg); }
+
+.game-card { padding: 26px 22px; }
+.question-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.countdown {
+  min-width: 55px;
+  border: 2px solid #201d2b;
+  border-radius: 999px;
+  background: #f6e96b;
+  padding: 6px 10px;
+  text-align: center;
+  font-weight: 800;
+}
+.countdown-urgent { background: #ea546f; color: white; animation: pulse .8s infinite; }
+.progress-track { height: 9px; overflow: hidden; border: 1.5px solid #201d2b; border-radius: 999px; background: #eeeaf0; }
+.progress-track i { display: block; height: 100%; background: #8ee4cf; transition: width .25s ease; }
+.answer-progress { margin: 7px 0 24px; color: #6c667b; font-size: .75rem; text-align: right; }
+.question-stage h2 { margin: 0 0 24px; font-size: clamp(1.4rem, 6vw, 2rem); line-height: 1.25; }
+.answer-form { display: grid; gap: 12px; }
+.character-count { margin-top: -7px; color: #8b8498; font-size: .72rem; text-align: right; }
+.submitted-state {
+  display: grid;
+  gap: 10px;
+  border: 2px solid #201d2b;
+  border-radius: 14px;
+  background: #dcf7ef;
+  padding: 18px;
+}
+.submitted-state p { margin: 0; font-size: 1.05rem; font-weight: 700; overflow-wrap: anywhere; }
+.submitted-state span { color: #4b7569; font-size: .78rem; }
+.loading-stage, .completion-stage, .error-stage { text-align: center; }
+.loading-stage h2, .completion-stage h2, .error-stage h2 { margin: 8px auto 12px; max-width: 390px; font-size: 1.75rem; }
+.loading-stage p, .completion-stage p, .error-stage > p { color: #6c667b; line-height: 1.5; }
+.film-reel { width: 70px; height: 70px; display: grid; place-items: center; margin: 5px auto 22px; border: 3px solid #201d2b; border-radius: 50%; background: #f6e96b; font-size: 2.2rem; animation: spin 3s linear infinite; }
+.loading-dots { display: flex; justify-content: center; gap: 8px; margin-top: 26px; }
+.loading-dots i { width: 10px; height: 10px; border-radius: 50%; background: #ea546f; animation: pulse 1s infinite; }
+.loading-dots i:nth-child(2) { animation-delay: .2s; }
+.loading-dots i:nth-child(3) { animation-delay: .4s; }
+.completion-stage .button, .error-stage .button { width: 100%; margin-top: 18px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }
