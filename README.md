@@ -45,6 +45,20 @@ npm run typecheck
 npm run build
 ```
 
+## GitHub Pages
+
+The included GitHub Actions workflow builds and deploys the app whenever
+`main` is updated.
+
+1. In the GitHub repository, open **Settings → Secrets and variables → Actions**.
+2. Add repository secrets named `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_ANON_KEY`.
+3. Open **Settings → Pages** and set **Source** to **GitHub Actions**.
+4. Push to `main`, then follow the deployment under the **Actions** tab.
+
+Do not select the repository root as the Pages source. The source files are not
+a deployable website until Vite builds them.
+
 ## Session and security notes
 
 - A random per-player token is stored in local browser storage so a refresh restores the lobby session.

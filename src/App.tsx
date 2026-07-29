@@ -11,7 +11,7 @@ import {
   startRoom,
 } from './lib/lobby'
 import { clearSession, loadSession, saveSession } from './lib/session'
-import { isSupabaseConfigured, supabase } from './lib/supabase'
+import { isSupabaseConfigured, supabase, supabaseConfigError } from './lib/supabase'
 import type { Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
@@ -91,7 +91,7 @@ function Landing({ onEnter }: { onEnter: (session: Session) => void }) {
       {!isSupabaseConfigured && (
         <div className="notice" role="status">
           <strong>One setup step remains.</strong>
-          <span>Add the two public Supabase values from <code>.env.example</code> to your local <code>.env</code>.</span>
+          <span>{supabaseConfigError} Add the two public Supabase values from <code>.env.example</code> to your local <code>.env</code>.</span>
         </div>
       )}
 
