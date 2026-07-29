@@ -37,14 +37,37 @@ export type GamePhase =
 
 export interface StoryPanel {
   panelNumber: number
-  narration: string
+  storyBeat?: string
+  narrationDraft?: string
+  narration?: string
   dialogue: string | null
-  drawingCaption: string
+  drawingBrief?: {
+    mainSubject: string
+    action: string
+    setting: string
+    mustInclude: string[]
+    compositionSuggestion: string | null
+    fullPrompt: string
+  }
+  drawingCaption?: string
 }
 
 export interface FinalStory {
   title: string
   estimatedDurationSeconds: number
+  ingredientUsage?: Array<{
+    roleKey: string
+    originalAnswer: string
+    usedAs: string
+    preserved: boolean
+  }>
+  entities?: Array<{
+    entityId: string
+    name: string | null
+    type: string
+    visualDescription: string
+    importantItems: string[]
+  }>
   panels: StoryPanel[]
 }
 

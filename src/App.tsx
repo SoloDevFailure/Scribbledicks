@@ -589,11 +589,11 @@ function GameScreen({
           {game.story.panels.map((panel) => (
             <li key={panel.panelNumber}>
               <span className="panel-number">Panel {panel.panelNumber}</span>
-              <p>{panel.narration}</p>
+              <p>{panel.narrationDraft ?? panel.narration}</p>
               {panel.dialogue && <blockquote>“{panel.dialogue}”</blockquote>}
               <div className="drawing-caption">
                 <strong>Drawing caption</strong>
-                <span>{panel.drawingCaption}</span>
+                <span>{panel.drawingBrief?.fullPrompt ?? panel.drawingCaption}</span>
               </div>
             </li>
           ))}
