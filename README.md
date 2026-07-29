@@ -1,8 +1,12 @@
 # Scribbledicks
 
-A mobile-first real-time party game foundation built with React, TypeScript, Vite, and Supabase.
+A mobile-first real-time party game built with React, TypeScript, Vite, Supabase,
+and a server-side OpenAI integration.
 
-This milestone includes only the lobby flow: create a room, join by room code, and see players update live. Story generation, prompts, drawing, timers, narration, game rounds, and external integrations are intentionally not included.
+The current gameplay wave includes the lobby plus private opening questions, a server-authoritative
+60-second deadline, frozen participants, aggregate answer progress, and a
+private OpenAI-generated outline. Drawing, storyboards, second-round questions,
+narration, audio, and the premiere remain intentionally unimplemented.
 
 ## Local setup
 
@@ -35,6 +39,49 @@ Open **Supabase → SQL Editor**, create a new query, paste the complete content
 `supabase/migrations/202607290001_initial_lobby.sql`
 
 Run it once. It creates the `rooms` and `players` tables, validation constraints, indexes, row-level security, restricted browser permissions, lobby RPC functions, and Realtime publication entries.
+
+If the initial migration was run before `202607290002_fix_join_room.sql` was
+added, run that second migration afterward. It repairs guest joining without
+deleting existing rooms or players.
+
+Then run `supabase/migrations/202607290003_opening_questions.sql`. It adds the
+game-state tables, private prompt and answer storage, AI jobs, story outlines,
+token-validating RPCs, and the first gameplay phase.
+
+## Outline Edge Function
+
+The browser never contacts OpenAI. Deploy the function from a terminal with the
+Supabase CLI linked to your project:
+
+```bash
+supabase login
+supabase link --project-ref your-project-ref
+supabase secrets set OPENAI_API_KEY=your-key OPENAI_MODEL=gpt-5-mini
+supabase functions deploy compose-outline --no-verify-jwt
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied automatically inside
+deployed Supabase Edge Functions. The service-role key and OpenAI key must never
+be added to GitHub Pages secrets or any `VITE_` variable.
+
+The function validates the local player session token, claims the single
+pending AI job atomically, loads answers itself, requests strict structured JSON
+from OpenAI, validates the spoiler-free slot count and content, and stores the
+private outline.
+
+For a dashboard-only deployment, create a `compose-outline` Edge Function,
+paste `supabase/functions/compose-outline/index.ts`, disable JWT verification
+for this function, and set `OPENAI_API_KEY` and `OPENAI_MODEL` under Edge
+Function secrets.
+
+## Gameplay smoke test
+
+After applying migration 003 to a development project, run
+`supabase/tests/opening_questions_smoke.sql` in the SQL Editor. It tests
+three-player and six-player assignment counts, foundational and unique roles,
+all-answer early progression, deadline progression with missing answers, and
+single AI-job creation. The script runs in a transaction and rolls back all
+test data.
 
 If the project already has either table or has already added them to `supabase_realtime`, do not run the migration blindly; review and reconcile it first.
 
@@ -76,3 +123,5 @@ a deployable website until Vite builds them.
 - `src/lib/supabase.ts` — public Supabase client configuration
 - `src/types.ts` — shared strict TypeScript types
 - `supabase/migrations/` — database schema and security migration
+- `supabase/functions/compose-outline/` — server-side OpenAI outline generation
+- `supabase/tests/` — rollback-only database smoke tests
