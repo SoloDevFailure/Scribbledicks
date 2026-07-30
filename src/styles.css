@@ -344,10 +344,13 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 }
 
 /* Shared production drawing board and offline development sandbox */
-.drawing-sandbox { min-height:100dvh; padding:12px; background:#d8d5dc; }
+.drawing-sandbox {
+  height:100dvh; min-height:560px; display:flex; flex-direction:column;
+  overflow:hidden; padding:8px 12px 10px; background:#d8d5dc;
+}
 .sandbox-controls {
   display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; max-width:1600px;
-  margin:0 auto 10px; padding:10px 14px; border:2px solid #201d2b; border-radius:10px;
+  flex:0 0 auto; margin:0 auto 8px; padding:7px 12px; border:2px solid #201d2b; border-radius:10px;
   background:#fffdf6; box-shadow:3px 3px 0 #201d2b;
 }
 .sandbox-controls>div { display:grid; margin-right:auto; }
@@ -360,13 +363,13 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .sandbox-toggle input { width:18px; height:18px; }
 .drawing-board {
   --panel:#f5f2e9; --chrome:#e9e5dc; width:min(100%,1600px);
-  min-height:min(900px,calc(100dvh - 100px)); margin:auto; overflow:hidden;
+  height:min(900px,calc(100dvh - 86px)); min-height:0; margin:auto; overflow:hidden;
   border:2px solid #201d2b; border-radius:12px; background:var(--panel);
   box-shadow:5px 6px 0 #201d2b; color:#201d2b;
 }
 .drawing-statusbar {
-  min-height:62px; display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:9px 16px; border-bottom:2px solid #201d2b; background:#fffdf6;
+  height:52px; min-height:52px; display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:6px 14px; border-bottom:2px solid #201d2b; background:#fffdf6;
 }
 .drawing-statusbar>div:first-child { display:grid; gap:2px; }
 .drawing-kicker { color:#6f667c; font-size:.65rem; font-weight:900; letter-spacing:.13em; text-transform:uppercase; }
@@ -377,31 +380,44 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .drawing-timer.warning { background:#ed536e; color:white; animation:timer-pulse .8s infinite alternate; }
 @keyframes timer-pulse { to { transform:scale(1.05); } }
 .drawing-workspace {
-  min-height:calc(min(900px,100dvh - 100px) - 62px); display:grid;
+  height:calc(100% - 52px); min-height:0; display:grid;
   grid-template-columns:112px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr);
 }
 .desktop-brief-bar {
-  grid-column:1/-1; display:flex; align-items:baseline; gap:14px; padding:10px 16px;
+  grid-column:1/-1; display:flex; align-items:baseline; gap:12px; padding:7px 14px;
   border-bottom:2px solid #201d2b; background:#fffdf6;
 }
-.desktop-brief-bar p { margin:0; font-size:.9rem; font-weight:800; line-height:1.35; }
+.desktop-brief-bar p {
+  margin:0; overflow:hidden; font-size:.82rem; font-weight:800; line-height:1.25;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+}
 .drawing-tools {
   grid-row:2; display:grid; align-content:start; grid-template-columns:repeat(2,1fr); gap:6px;
-  padding:10px 8px; border-right:2px solid #201d2b; background:var(--chrome);
+  padding:8px; border-right:2px solid #201d2b; background:var(--chrome);
 }
 .drawing-tools button,.compact-dock button,.compact-more button {
-  min-width:0; min-height:56px; display:grid; place-items:center; gap:1px; padding:5px 2px;
+  min-width:0; min-height:62px; display:grid; place-items:center; gap:2px; padding:6px 3px;
   border:1px solid #a39daa; border-radius:7px; background:#fffdf6; color:#201d2b;
 }
-.drawing-tools button span,.compact-dock button span,.compact-more button span { font-size:1.25rem; line-height:1; }
+.drawing-tools button:hover:not(:disabled),.compact-dock button:hover:not(:disabled),.compact-more button:hover:not(:disabled) {
+  border-color:#201d2b; background:#fff7c9; box-shadow:inset 0 0 0 1px #201d2b;
+}
+.drawing-tools .tool-icon,.compact-dock .tool-icon,.compact-more .tool-icon {
+  width:34px; height:34px; display:grid; place-items:center;
+}
+.drawing-tools .tool-icon svg { width:30px; height:30px; }
+.compact-dock .tool-icon svg,.compact-more .tool-icon svg { width:25px; height:25px; }
 .drawing-tools button small,.compact-dock small,.compact-more small { font-size:.54rem; font-weight:800; }
 .drawing-tools button.active,.compact-dock button.active,.compact-more button.active {
-  border:2px solid #201d2b; background:#8ee4cf;
+  border:2px solid #201d2b; background:#8ee4cf; box-shadow:inset 0 0 0 2px #fff;
 }
-.drawing-main { grid-row:2; min-width:0; display:flex; flex-direction:column; padding:10px; background:#c8c5cc; }
+.drawing-main {
+  grid-row:2; min-width:0; min-height:0; display:flex; flex-direction:column;
+  overflow:hidden; padding:7px 10px 8px; background:#c8c5cc;
+}
 .drawing-options {
-  min-height:48px; display:flex; align-items:center; gap:8px; margin:-10px -10px 10px;
-  padding:7px 10px; border-bottom:1px solid #8f8996; background:var(--chrome);
+  min-height:42px; display:flex; align-items:center; gap:7px; margin:-7px -10px 7px;
+  padding:4px 10px; border-bottom:1px solid #8f8996; background:var(--chrome);
 }
 .drawing-options>span { min-width:80px; }
 .drawing-options button,.drawing-options select,.brief-toggle {
@@ -414,7 +430,8 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .thickness-options button i { display:block; border-radius:50%; background:#201d2b; }
 .thickness-options button.active { outline:2px solid #43a98d; }
 .canvas-frame {
-  position:relative; width:min(100%,1180px); aspect-ratio:16/9; margin:auto; overflow:hidden;
+  position:relative; width:min(100%,1180px,calc((100dvh - 300px) * 16 / 9));
+  max-height:calc(100dvh - 300px); aspect-ratio:16/9; margin:auto; overflow:hidden;
   border:2px solid #201d2b; background:#fff; box-shadow:2px 2px 0 rgba(32,29,43,.35);
   touch-action:none;
 }
@@ -447,7 +464,7 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .drawing-success span { color:#5c736d; font-size:.72rem; }
 .desktop-bottom-controls {
   display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:16px;
-  width:min(100%,1180px); margin:8px auto 0; padding:8px 10px;
+  width:min(100%,1180px); min-height:58px; margin:6px auto 0; padding:5px 9px;
   border:1px solid #8f8996; border-radius:8px; background:var(--chrome);
 }
 .desktop-submit-actions { display:flex; align-items:center; gap:7px; }
@@ -466,6 +483,31 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .text-entry-backdrop label { display:grid; gap:5px; font-weight:800; }
 .text-entry-backdrop input,.text-entry-backdrop select { min-height:44px; border:2px solid #201d2b; border-radius:8px; padding:8px; }
 .text-entry-backdrop form>div { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.active-text-box {
+  position:absolute; z-index:5; min-width:24px; min-height:20px;
+  border:2px solid #367fca; background:rgba(255,255,255,.14);
+  box-shadow:0 0 0 1px rgba(255,255,255,.9); touch-action:none;
+}
+.active-text-box textarea {
+  position:absolute; inset:0; width:100%; height:100%; resize:none; overflow:hidden;
+  border:0; outline:0; padding:8px 9px; background:rgba(255,255,255,.18);
+  color:inherit; font:700 1em/1.18 Arial,sans-serif; white-space:pre-wrap;
+}
+.text-move-handle {
+  position:absolute; left:50%; top:-27px; z-index:3; transform:translateX(-50%);
+  height:24px; min-width:54px; border:1px solid #1e5f9f; border-radius:5px;
+  background:#367fca; color:white; font-size:10px; font-weight:900; cursor:move; touch-action:none;
+}
+.text-handle,.text-resize-handle {
+  position:absolute; z-index:4; width:12px; height:12px; border:2px solid white;
+  border-radius:2px; background:#367fca; box-shadow:0 0 0 1px #1e5f9f; pointer-events:none;
+}
+.text-handle-nw { left:-7px; top:-7px; }
+.text-handle-ne { right:-7px; top:-7px; }
+.text-handle-sw { left:-7px; bottom:-7px; }
+.text-resize-handle {
+  right:-8px; bottom:-8px; padding:0; cursor:nwse-resize; pointer-events:auto; touch-action:none;
+}
 .drawing-layout-compact .drawing-workspace { display:block; min-height:0; }
 .drawing-layout-compact .desktop-brief-bar,.drawing-layout-compact .desktop-bottom-controls,
 .drawing-layout-compact .drawing-tools,.drawing-layout-compact .drawing-options,
