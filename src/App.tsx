@@ -31,7 +31,7 @@ import type { GameState, Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-const APP_BUILD = '2026.07.29.3'
+const APP_BUILD = '2026.07.30.2'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
