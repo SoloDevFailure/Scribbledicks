@@ -151,20 +151,20 @@ declare
     'OBJECT','TIME','CONSEQUENCE','HELPER','SECRET','TRANSPORT','TWIST','RULE','REWARD'
   ];
   prompts text[] := array[
-    'Who is the main character in this story? It can be a real person, fictional character, animal, object or something completely ridiculous.',
-    'Where does this story begin? Choose any real, fictional or absurd location.',
+    'Who is the main character in this story? It can be a person, fictional character, animal, object, or anything else.',
+    'Where does this story begin? Choose any real or fictional location.',
     'What unexpected event happens that sets the story in motion?',
     'Who or what causes the main problem?',
     'What is someone desperately trying to achieve?',
     'What makes the situation much harder than it should be?',
-    'What unusual object becomes important to the story?',
-    'When does this story take place? It may be a time period, date, season or ridiculous moment.',
-    'What terrible or ridiculous thing will happen if the problem is not solved?',
+    'What object becomes important to the story?',
+    'When does this story take place? It may be a time period, date, season, or particular moment.',
+    'What will happen if the problem is not solved?',
     'Who or what unexpectedly helps during the adventure?',
-    'What strange secret is somebody hiding?',
+    'What secret is somebody hiding?',
     'How does someone travel during the story?',
     'What completely unexpected complication occurs?',
-    'What bizarre rule must everyone obey?',
+    'What rule must everyone obey?',
     'What does someone hope to gain if they succeed?'
   ];
   shuffled_indices integer[];
@@ -224,7 +224,7 @@ begin
       ) values (
         new_game.id, participant_record.id, 'opening_questions',
         'EXTRA_INGREDIENT_' || role_index,
-        'Name one strange detail that could become important during the story.'
+        'Name one detail that could become important during the story.'
       );
     end if;
   end loop;

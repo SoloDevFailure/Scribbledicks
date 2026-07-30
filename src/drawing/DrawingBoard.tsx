@@ -42,6 +42,11 @@ const toolLabels: Record<DrawingTool, string> = {
   ellipse: 'Ellipse',
   text: 'Text',
 }
+const toolShortLabels: Record<DrawingTool, string> = {
+  ...toolLabels,
+  eyedropper: 'Dropper',
+  rectangle: 'Rect',
+}
 
 interface Point {
   x: number
@@ -539,6 +544,19 @@ export default function DrawingBoard({
   const createSubmission = useCallback(async (): Promise<DrawingSubmission> => {
     if (activeTextBox) commitActiveText()
     const canvas = canvasRef.current!
+    const pixels = context()!.getImageData(0, 0, WIDTH, HEIGHT).data
+    let isBlank = true
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      const alpha = pixels[offset + 3] ?? 0
+      if (alpha > 0 && (
+        (pixels[offset] ?? 255) < 250 ||
+        (pixels[offset + 1] ?? 255) < 250 ||
+        (pixels[offset + 2] ?? 255) < 250
+      )) {
+        isBlank = false
+        break
+      }
+    }
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => result ? resolve(result) : reject(new Error('PNG export failed.')), 'image/png')
     })
@@ -547,9 +565,10 @@ export default function DrawingBoard({
       dataUrl: canvas.toDataURL('image/png'),
       width: WIDTH,
       height: HEIGHT,
+      isBlank,
       commandData: JSON.stringify({ format: 'raster-snapshots-v1', historySteps: history.current.length }),
     }
-  }, [activeTextBox, commitActiveText])
+  }, [activeTextBox, commitActiveText, context])
 
   const submit = useCallback(async () => {
     if (submitted || submitting) return
@@ -642,7 +661,7 @@ export default function DrawingBoard({
       title={toolLabels[value]}
     >
       <span className="tool-icon" aria-hidden="true">{toolIcon(value)}</span>
-      <small>{toolLabels[value]}</small>
+      <small>{toolShortLabels[value]}</small>
     </button>
   )
 
@@ -656,6 +675,16 @@ export default function DrawingBoard({
         <div className={`drawing-timer ${timerEnabled && seconds <= 15 ? 'warning' : ''}`}>
           {timerEnabled ? `${seconds}s` : 'Timer off'}
         </div>
+        {onLayoutChange && (
+          <label className="drawing-layout-picker">
+            <span>Layout</span>
+            <select value={layout} onChange={(event) => onLayoutChange(event.target.value as DrawingLayout)}>
+              <option value="auto">Auto</option>
+              <option value="desktop">Desktop</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+        )}
       </header>
 
       <div className="drawing-workspace">

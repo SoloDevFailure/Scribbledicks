@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.compose-story]
 verify_jwt = false
+
+[functions.submit-drawing]
+verify_jwt = false

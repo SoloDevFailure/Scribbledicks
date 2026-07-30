@@ -64,7 +64,6 @@ export default function DrawingSandbox() {
         artistCount={5}
         layout={layout}
         storageKey="scribbledicks:drawing-sandbox-draft"
-        onLayoutChange={changeLayout}
         onSubmit={submit}
       />
     </main>

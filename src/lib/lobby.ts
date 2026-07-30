@@ -1,4 +1,5 @@
 import type { GameState, Player, Room, Session } from '../types'
+import type { DrawingSubmission } from '../drawing/types'
 import { createPlayerToken } from './session'
 import { supabase } from './supabase'
 
@@ -127,6 +128,24 @@ export async function submitFollowupAnswer(
   return data as GameState
 }
 
+export async function submitDrawing(
+  session: Session,
+  gameId: string,
+  assignmentId: string,
+  submission: DrawingSubmission,
+): Promise<void> {
+  const body = new FormData()
+  body.append('gameId', gameId)
+  body.append('assignmentId', assignmentId)
+  body.append('playerToken', session.playerToken)
+  body.append('width', String(submission.width))
+  body.append('height', String(submission.height))
+  body.append('isBlank', String(submission.isBlank))
+  body.append('drawing', submission.blob, 'drawing.png')
+  const { error } = await requireClient().functions.invoke('submit-drawing', { body })
+  if (error) throw error
+}
+
 export async function checkGameProgress(session: Session, gameId: string): Promise<void> {
   const { error } = await requireClient().rpc('check_game_progress', {
     p_game_id: gameId,
@@ -218,5 +237,10 @@ export function friendlyError(error: unknown): string {
   if (message.includes('SUBMISSIONS_CLOSED')) return 'Time is up. Your answer was not submitted.'
   if (message.includes('NOT_PARTICIPANT')) return 'You are not an active participant in this game.'
   if (message.includes('GAME_NOT_FOUND')) return 'This game session could not be restored.'
+  if (message.includes('DRAWING_DEADLINE_EXPIRED') || message.includes('DRAWING_PHASE_CLOSED')) {
+    return 'The drawing round has ended. Check for updates.'
+  }
+  if (message.includes('DRAWING_ASSIGNMENT_NOT_FOUND')) return 'This drawing assignment could not be verified.'
+  if (message.includes('INVALID_DRAWING')) return 'The drawing could not be submitted in the required PNG format.'
   return message || 'Something went wrong. Please try again.'
 }

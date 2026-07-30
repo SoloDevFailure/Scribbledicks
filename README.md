@@ -64,7 +64,10 @@ token-validating RPCs, and the first gameplay phase.
 
 Run migrations `202607290004_hard_reset.sql`,
 `202607290005_neutral_prompts.sql`, and
-`202607290006_followups_and_story.sql` afterward, in filename order.
+`202607290006_followups_and_story.sql` afterward, in filename order. Then run
+`202607300007_drawing_stage.sql` to add the private multiplayer drawing phase,
+stable panel assignments, the 90-second shared deadline, and the private
+`game-drawings` Storage bucket.
 
 ## Outline Edge Function
 
@@ -77,6 +80,7 @@ supabase link --project-ref your-project-ref
 supabase secrets set OPENAI_API_KEY=your-key OPENAI_MODEL=gpt-5-mini
 supabase functions deploy compose-outline --no-verify-jwt
 supabase functions deploy compose-story --no-verify-jwt
+supabase functions deploy submit-drawing --no-verify-jwt
 ```
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied automatically inside
@@ -89,9 +93,22 @@ from OpenAI, validates the spoiler-free slot count and content, and stores the
 private outline.
 
 For a dashboard-only deployment, create both `compose-outline` and
-`compose-story` Edge Functions, paste each matching `index.ts`, disable JWT
-verification for both functions, and set `OPENAI_API_KEY` and `OPENAI_MODEL`
-under Edge Function secrets.
+`compose-story` Edge Functions plus `submit-drawing`, paste each matching
+`index.ts`, and disable JWT verification for all three functions. Only the two
+story functions need `OPENAI_API_KEY` and `OPENAI_MODEL`.
+
+The drawing migration creates `game-drawings` as a private bucket. Browsers
+cannot list or fetch its contents directly. `submit-drawing` validates the
+game's custom player token, uploads to the assignment's one stable PNG path,
+and records the explicit assignment-to-panel relationship. Do not make this
+bucket public or add the service-role key to the frontend.
+
+At the deadline, connected clients automatically attempt their final PNG
+upload. Ten seconds later the server marks any still-unresolved assignments as
+`missing`, so a disconnected player cannot hold up the game. A white canvas is
+stored and marked `blank`. The service-only `get_premiere_panels(game_id)` RPC
+returns panels in chronological order with narration, drawing brief, drawing
+status/path, and artist details for the future Premiere implementation.
 
 ## Gameplay smoke test
 

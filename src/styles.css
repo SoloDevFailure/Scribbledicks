@@ -378,6 +378,18 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
   background:#f6e96b; font-weight:900; text-align:center;
 }
 .drawing-timer.warning { background:#ed536e; color:white; animation:timer-pulse .8s infinite alternate; }
+.drawing-layout-picker { display:flex; align-items:center; gap:6px; font-size:.65rem; font-weight:900; }
+.drawing-layout-picker select { min-height:32px; border:1px solid #837d8d; border-radius:6px; background:#fff; }
+.production-drawing-stage {
+  width:100%; height:100dvh; min-height:520px; display:flex; overflow:hidden;
+  padding:8px; background:#d8d5dc;
+}
+.production-drawing-stage .drawing-board { height:calc(100dvh - 16px); }
+.drawing-host-overlay { position:fixed; z-index:30; left:18px; bottom:18px; }
+.drawing-host-overlay .host-controls { margin:0; padding:5px 7px; background:#fffdf6; box-shadow:2px 2px 0 #201d2b; }
+.drawing-host-overlay .host-controls>span { display:none; }
+.drawing-host-overlay .host-reset-button { min-height:32px; }
+.drawing-waiting-stage { text-align:center; }
 @keyframes timer-pulse { to { transform:scale(1.05); } }
 .drawing-workspace {
   height:calc(100% - 52px); min-height:0; display:grid;
@@ -396,7 +408,8 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
   padding:8px; border-right:2px solid #201d2b; background:var(--chrome);
 }
 .drawing-tools button,.compact-dock button,.compact-more button {
-  min-width:0; min-height:62px; display:grid; place-items:center; gap:2px; padding:6px 3px;
+  min-width:0; min-height:62px; display:grid; grid-template-rows:34px 12px; place-items:center;
+  align-content:center; gap:2px; overflow:hidden; padding:6px 3px;
   border:1px solid #a39daa; border-radius:7px; background:#fffdf6; color:#201d2b;
 }
 .drawing-tools button:hover:not(:disabled),.compact-dock button:hover:not(:disabled),.compact-more button:hover:not(:disabled) {
@@ -407,7 +420,10 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 }
 .drawing-tools .tool-icon svg { width:30px; height:30px; }
 .compact-dock .tool-icon svg,.compact-more .tool-icon svg { width:25px; height:25px; }
-.drawing-tools button small,.compact-dock small,.compact-more small { font-size:.54rem; font-weight:800; }
+.drawing-tools button small,.compact-dock small,.compact-more small {
+  display:block; max-width:100%; overflow:hidden; font-size:.54rem; font-weight:800;
+  line-height:1; text-overflow:ellipsis; white-space:nowrap;
+}
 .drawing-tools button.active,.compact-dock button.active,.compact-more button.active {
   border:2px solid #201d2b; background:#8ee4cf; box-shadow:inset 0 0 0 2px #fff;
 }

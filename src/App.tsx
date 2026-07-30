@@ -19,7 +19,10 @@ import {
   startRoom,
   submitOpeningAnswer,
   submitFollowupAnswer,
+  submitDrawing,
 } from './lib/lobby'
+import DrawingBoard from './drawing/DrawingBoard'
+import type { DrawingLayout, DrawingSubmission } from './drawing/types'
 import { clearSession, loadSession, saveSession } from './lib/session'
 import { isSupabaseConfigured, supabase, supabaseConfigError } from './lib/supabase'
 import type { GameState, Player, Room, Session } from './types'
@@ -446,6 +449,8 @@ function GameScreen({
   const [resetting, setResetting] = useState(false)
   const [remaining, setRemaining] = useState(() => secondsRemaining(game.phaseDeadlineAt))
   const [localError, setLocalError] = useState('')
+  const [drawingLayout, setDrawingLayout] = useState<DrawingLayout>(() =>
+    (localStorage.getItem('scribbledicks:drawing-layout') as DrawingLayout | null) ?? 'auto')
 
   useEffect(() => setAnswer(game.answerText ?? ''), [game.answerText])
 
@@ -553,6 +558,86 @@ function GameScreen({
   ) : null
 
   const shownError = localError || error
+
+  const changeDrawingLayout = (next: DrawingLayout) => {
+    setDrawingLayout(next)
+    localStorage.setItem('scribbledicks:drawing-layout', next)
+  }
+
+  const uploadDrawing = async (submission: DrawingSubmission) => {
+    if (!game.assignmentId) throw new Error('Your drawing assignment could not be restored.')
+    await submitDrawing(session, game.gameId, game.assignmentId, submission)
+    await onRefresh()
+  }
+
+  if (game.phase === 'drawing') {
+    const resolved = game.drawingStatus && game.drawingStatus !== 'assigned'
+    if (resolved) {
+      return (
+        <section className="card game-card drawing-waiting-stage">
+          {hostControls}
+          <span className="eyebrow">Masterpiece delivered</span>
+          <h2>Your drawing is locked in.</h2>
+          <p>{game.answerCount} of {game.playerCount} artists have finished.</p>
+          <div className="waiting-message"><i /><span>Waiting for the other artists…</span></div>
+          <button className="button button-secondary" type="button" onClick={() => void onRefresh()}>
+            Check for updates
+          </button>
+        </section>
+      )
+    }
+    if (!game.assignmentId || !game.promptText) {
+      return (
+        <section className="card game-card error-stage">
+          {hostControls}
+          <span className="eyebrow">Missing drawing brief</span>
+          <h2>Your scene could not be restored.</h2>
+          <button className="button button-secondary" type="button" onClick={() => void onRefresh()}>
+            Check for updates
+          </button>
+        </section>
+      )
+    }
+    return (
+      <div className="production-drawing-stage">
+        {game.isHost && <div className="drawing-host-overlay">{hostControls}</div>}
+        <DrawingBoard
+          prompt={game.promptText}
+          deadlineAt={game.phaseDeadlineAt}
+          timerEnabled
+          artistsFinished={game.answerCount}
+          artistCount={game.playerCount}
+          layout={drawingLayout}
+          storageKey={`scribbledicks:drawing:${game.gameId}:${game.assignmentId}`}
+          onLayoutChange={changeDrawingLayout}
+          onSubmit={uploadDrawing}
+        />
+      </div>
+    )
+  }
+
+  if (game.phase === 'drawing_complete') {
+    return (
+      <section className="card game-card drawing-waiting-stage">
+        {hostControls}
+        <span className="eyebrow">Every masterpiece is ready</span>
+        <h2>The storyboard is complete.</h2>
+        <p>The Premiere is the next stage. No drawings are revealed early.</p>
+      </section>
+    )
+  }
+
+  if (game.phase === 'drawing_error') {
+    return (
+      <section className="card game-card error-stage">
+        {hostControls}
+        <span className="eyebrow">The art department panicked</span>
+        <h2>The drawing round could not continue.</h2>
+        <p>{game.isHost ? game.aiError || 'Reset the game and try again.' : 'The host can reset the game.'}</p>
+      </section>
+    )
+  }
+
   if (game.phase === 'composing_outline' || game.phase === 'composing_story') {
     const composingStory = game.phase === 'composing_story'
     return (

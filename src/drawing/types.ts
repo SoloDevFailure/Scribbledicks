@@ -15,6 +15,7 @@ export interface DrawingSubmission {
   dataUrl: string
   width: number
   height: number
+  isBlank: boolean
   commandData: string
 }
 

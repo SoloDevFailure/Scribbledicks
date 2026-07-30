@@ -33,6 +33,9 @@ export type GamePhase =
   | 'followup_questions'
   | 'composing_story'
   | 'story_complete'
+  | 'drawing'
+  | 'drawing_complete'
+  | 'drawing_error'
   | 'error'
 
 export interface StoryPanel {
@@ -80,6 +83,8 @@ export interface GameState {
   answerCount: number
   isHost: boolean
   assignmentId: string | null
+  drawingPanelId: string | null
+  drawingStatus: 'assigned' | 'submitted' | 'blank' | 'missing' | 'failed' | null
   promptText: string | null
   submittedAt: string | null
   answerText: string | null
