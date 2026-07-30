@@ -5,6 +5,17 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import {
+  Circle,
+  Eraser,
+  PaintBucket,
+  Pencil,
+  Pipette,
+  Slash,
+  Square,
+  Type,
+  type LucideIcon,
+} from 'lucide-react'
 import type {
   DrawingBoardProps,
   DrawingLayout,
@@ -37,6 +48,24 @@ interface Point {
   y: number
 }
 
+interface TextBox {
+  x: number
+  y: number
+  width: number
+  height: number
+  text: string
+  colour: string
+  fontSize: number
+  autoFit: boolean
+}
+
+interface TextTransform {
+  mode: 'move' | 'resize'
+  pointerX: number
+  pointerY: number
+  original: TextBox
+}
+
 function remainingSeconds(deadlineAt: string | null): number {
   if (!deadlineAt) return 90
   return Math.max(0, Math.ceil((new Date(deadlineAt).getTime() - Date.now()) / 1000))
@@ -46,6 +75,46 @@ function hexToRgba(hex: string): [number, number, number, number] {
   const normalized = hex.replace('#', '')
   const value = Number.parseInt(normalized, 16)
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255, 255]
+}
+
+function wrappedLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const paragraphs = text.split('\n')
+  const lines: string[] = []
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(/\s+/).filter(Boolean)
+    if (words.length === 0) {
+      lines.push('')
+      continue
+    }
+    let line = words[0]!
+    for (const word of words.slice(1)) {
+      const candidate = `${line} ${word}`
+      if (ctx.measureText(candidate).width <= maxWidth) line = candidate
+      else {
+        lines.push(line)
+        line = word
+      }
+    }
+    lines.push(line)
+  }
+  return lines
+}
+
+function fittedFontSize(
+  ctx: CanvasRenderingContext2D,
+  box: Pick<TextBox, 'width' | 'height' | 'text'>,
+  preferred = 72,
+): number {
+  for (let size = Math.min(preferred, Math.floor(box.height * .7)); size >= 18; size -= 2) {
+    ctx.font = `700 ${size}px Arial, sans-serif`
+    const lines = wrappedLines(ctx, box.text || 'Type here', Math.max(20, box.width - 20))
+    if (lines.length * size * 1.18 <= box.height - 16) return size
+  }
+  return 18
 }
 
 export default function DrawingBoard({
@@ -70,6 +139,8 @@ export default function DrawingBoard({
   const historyIndex = useRef(-1)
   const initialized = useRef(false)
   const autoSubmitted = useRef(false)
+  const textTransform = useRef<TextTransform | null>(null)
+  const textInputRef = useRef<HTMLTextAreaElement>(null)
 
   const [tool, setTool] = useState<DrawingTool>('pen')
   const [colour, setColour] = useState('#17131f')
@@ -83,14 +154,24 @@ export default function DrawingBoard({
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
-  const [textPoint, setTextPoint] = useState<Point | null>(null)
-  const [textValue, setTextValue] = useState('')
+  const [activeTextBox, setActiveTextBox] = useState<TextBox | null>(null)
+  const [canvasDisplayWidth, setCanvasDisplayWidth] = useState(1)
 
   const effectiveLocked = locked || submitted || submitting || (timerEnabled && seconds === 0)
 
   const context = useCallback(() => canvasRef.current?.getContext('2d', {
     willReadFrequently: true,
   }) ?? null, [])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const update = () => setCanvasDisplayWidth(canvas.getBoundingClientRect().width || 1)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [])
 
   const updateHistoryButtons = useCallback(() => {
     setCanUndo(historyIndex.current > 0)
@@ -117,6 +198,50 @@ export default function DrawingBoard({
     updateHistoryButtons()
     saveDraft()
   }, [context, saveDraft, updateHistoryButtons])
+
+  const flattenTextBox = useCallback((box: TextBox) => {
+    if (!box.text.trim()) return
+    const ctx = context()
+    if (!ctx) return
+    const size = box.autoFit ? fittedFontSize(ctx, box) : box.fontSize
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = box.colour
+    ctx.font = `700 ${size}px Arial, sans-serif`
+    ctx.textBaseline = 'top'
+    const lines = wrappedLines(ctx, box.text.trim(), Math.max(20, box.width - 20))
+    const lineHeight = size * 1.18
+    lines.slice(0, Math.max(1, Math.floor((box.height - 16) / lineHeight)))
+      .forEach((line, index) => ctx.fillText(line, box.x + 10, box.y + 8 + index * lineHeight))
+  }, [context])
+
+  const commitActiveText = useCallback(() => {
+    if (!activeTextBox) return
+    flattenTextBox(activeTextBox)
+    setActiveTextBox(null)
+    commit()
+  }, [activeTextBox, commit, flattenTextBox])
+
+  const chooseTool = (nextTool: DrawingTool) => {
+    if (activeTextBox && nextTool !== 'text') commitActiveText()
+    setTool(nextTool)
+    setMoreOpen(false)
+  }
+
+  const chooseColour = (nextColour: string) => {
+    setColour(nextColour)
+    setActiveTextBox((current) => current ? { ...current, colour: nextColour } : current)
+  }
+
+  const chooseTextSize = (nextSize: number) => {
+    if (nextSize > 0) setTextSize(nextSize)
+    setActiveTextBox((current) => {
+      if (!current) return current
+      if (nextSize === 0) {
+        return { ...current, fontSize: fittedFontSize(context()!, current), autoFit: true }
+      }
+      return { ...current, fontSize: nextSize, autoFit: false }
+    })
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -214,7 +339,7 @@ export default function DrawingBoard({
   const pickColour = (point: Point) => {
     const pixel = context()?.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data
     if (!pixel) return
-    setColour(`#${[pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+    chooseColour(`#${[pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
       .map((channel) => channel.toString(16).padStart(2, '0')).join('')}`)
     setTool('pen')
   }
@@ -243,15 +368,14 @@ export default function DrawingBoard({
   const pointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (effectiveLocked) return
     event.preventDefault()
+    if (activeTextBox) {
+      commitActiveText()
+      return
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = pointFromEvent(event)
     if (tool === 'fill') return floodFill(point)
     if (tool === 'eyedropper') return pickColour(point)
-    if (tool === 'text') {
-      setTextPoint(point)
-      setTextValue('')
-      return
-    }
     const ctx = context()
     if (!ctx) return
     drawing.current = true
@@ -283,6 +407,20 @@ export default function DrawingBoard({
       return
     }
     if (previewBase.current) ctx.putImageData(previewBase.current, 0, 0)
+    if (tool === 'text') {
+      ctx.save()
+      ctx.setLineDash([10, 7])
+      ctx.lineWidth = 3
+      ctx.strokeStyle = '#367fca'
+      ctx.strokeRect(
+        startPoint.current.x,
+        startPoint.current.y,
+        point.x - startPoint.current.x,
+        point.y - startPoint.current.y,
+      )
+      ctx.restore()
+      return
+    }
     drawShape(ctx, startPoint.current, point)
   }
 
@@ -290,7 +428,25 @@ export default function DrawingBoard({
     if (!drawing.current) return
     event.preventDefault()
     drawing.current = false
-    context()!.globalCompositeOperation = 'source-over'
+    const ctx = context()!
+    ctx.globalCompositeOperation = 'source-over'
+    if (tool === 'text' && startPoint.current) {
+      const end = pointFromEvent(event)
+      const base = previewBase.current
+      if (base) ctx.putImageData(base, 0, 0)
+      const x = Math.max(0, Math.min(startPoint.current.x, end.x))
+      const y = Math.max(0, Math.min(startPoint.current.y, end.y))
+      const width = Math.min(WIDTH - x, Math.max(80, Math.abs(end.x - startPoint.current.x)))
+      const height = Math.min(HEIGHT - y, Math.max(50, Math.abs(end.y - startPoint.current.y)))
+      setActiveTextBox({
+        x, y, width, height, text: '', colour, fontSize: textSize, autoFit: true,
+      })
+      window.setTimeout(() => textInputRef.current?.focus(), 0)
+      previewBase.current = null
+      startPoint.current = null
+      lastPoint.current = null
+      return
+    }
     previewBase.current = null
     startPoint.current = null
     lastPoint.current = null
@@ -302,7 +458,7 @@ export default function DrawingBoard({
     drawing.current = false
     previewBase.current = null
     startPoint.current = null
-    setTextPoint(null)
+    setActiveTextBox(null)
   }, [context])
 
   const undo = useCallback(() => {
@@ -335,21 +491,53 @@ export default function DrawingBoard({
     commit()
   }
 
-  const placeText = () => {
-    if (!textPoint || !textValue.trim()) return
-    const ctx = context()
-    if (!ctx) return
-    ctx.globalCompositeOperation = 'source-over'
-    ctx.fillStyle = colour
-    ctx.font = `700 ${textSize}px Arial, sans-serif`
-    ctx.textBaseline = 'top'
-    ctx.fillText(textValue.trim(), textPoint.x, textPoint.y, WIDTH - textPoint.x - 12)
-    setTextPoint(null)
-    setTextValue('')
-    commit()
+  const beginTextTransform = (
+    event: ReactPointerEvent<HTMLElement>,
+    mode: TextTransform['mode'],
+  ) => {
+    if (!activeTextBox) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    textTransform.current = {
+      mode,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      original: { ...activeTextBox },
+    }
+  }
+
+  const moveTextTransform = (event: ReactPointerEvent<HTMLElement>) => {
+    const transform = textTransform.current
+    if (!transform) return
+    event.preventDefault()
+    const logicalScale = WIDTH / canvasDisplayWidth
+    const dx = (event.clientX - transform.pointerX) * logicalScale
+    const dy = (event.clientY - transform.pointerY) * logicalScale
+    if (transform.mode === 'move') {
+      setActiveTextBox({
+        ...transform.original,
+        x: Math.max(0, Math.min(WIDTH - transform.original.width, transform.original.x + dx)),
+        y: Math.max(0, Math.min(HEIGHT - transform.original.height, transform.original.y + dy)),
+      })
+    } else {
+      const resized = {
+        ...transform.original,
+        width: Math.max(80, Math.min(WIDTH - transform.original.x, transform.original.width + dx)),
+        height: Math.max(50, Math.min(HEIGHT - transform.original.y, transform.original.height + dy)),
+      }
+      if (resized.autoFit) resized.fontSize = fittedFontSize(context()!, resized)
+      setActiveTextBox(resized)
+    }
+  }
+
+  const endTextTransform = () => {
+    textTransform.current = null
+    window.setTimeout(() => textInputRef.current?.focus(), 0)
   }
 
   const createSubmission = useCallback(async (): Promise<DrawingSubmission> => {
+    if (activeTextBox) commitActiveText()
     const canvas = canvasRef.current!
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => result ? resolve(result) : reject(new Error('PNG export failed.')), 'image/png')
@@ -361,7 +549,7 @@ export default function DrawingBoard({
       height: HEIGHT,
       commandData: JSON.stringify({ format: 'raster-snapshots-v1', historySteps: history.current.length }),
     }
-  }, [])
+  }, [activeTextBox, commitActiveText])
 
   const submit = useCallback(async () => {
     if (submitted || submitting) return
@@ -386,10 +574,26 @@ export default function DrawingBoard({
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
-      if (textPoint || effectiveLocked) return
       const target = event.target as HTMLElement | null
-      if (target?.matches('input, textarea, select')) return
       const key = event.key.toLocaleLowerCase()
+      const typing = Boolean(target?.matches('input, textarea, select'))
+      if (key === 'escape' && activeTextBox) {
+        event.preventDefault()
+        cancelActive()
+        return
+      }
+      if (typing) return
+      if (effectiveLocked) return
+      if (activeTextBox && (key === 'delete' || key === 'backspace')) {
+        event.preventDefault()
+        setActiveTextBox(null)
+        return
+      }
+      if (key === 'escape') {
+        event.preventDefault()
+        cancelActive()
+        return
+      }
       if ((event.ctrlKey || event.metaKey) && key === 'z') {
         event.preventDefault()
         if (event.shiftKey) redo()
@@ -401,26 +605,25 @@ export default function DrawingBoard({
         redo()
         return
       }
+      if (activeTextBox) return
       const shortcuts: Partial<Record<string, DrawingTool>> = {
         b: 'pen', p: 'pen', e: 'eraser', f: 'fill', i: 'eyedropper',
         l: 'line', r: 'rectangle', o: 'ellipse', t: 'text',
       }
       if (shortcuts[key]) {
         event.preventDefault()
-        setTool(shortcuts[key]!)
+        chooseTool(shortcuts[key]!)
       } else if (['1', '2', '3', '4'].includes(key)) {
         event.preventDefault()
         setThicknessIndex(Number(key) - 1)
-      } else if (key === 'escape') {
-        event.preventDefault()
-        cancelActive()
       }
     }
     window.addEventListener('keydown', keyDown)
     return () => window.removeEventListener('keydown', keyDown)
-  }, [cancelActive, effectiveLocked, redo, textPoint, undo])
+  }, [activeTextBox, cancelActive, effectiveLocked, redo, undo])
 
   const exportPng = () => {
+    if (activeTextBox) commitActiveText()
     const link = document.createElement('a')
     link.download = 'scribbledicks-drawing.png'
     link.href = canvasRef.current!.toDataURL('image/png')
@@ -434,11 +637,11 @@ export default function DrawingBoard({
       type="button"
       className={tool === value ? 'active' : ''}
       aria-pressed={tool === value}
-      onClick={() => { setTool(value); setMoreOpen(false) }}
+      onClick={() => chooseTool(value)}
       disabled={effectiveLocked}
       title={toolLabels[value]}
     >
-      <span aria-hidden="true">{toolIcon(value)}</span>
+      <span className="tool-icon" aria-hidden="true">{toolIcon(value)}</span>
       <small>{toolLabels[value]}</small>
     </button>
   )
@@ -484,7 +687,9 @@ export default function DrawingBoard({
               ))}
             </div>
             {tool === 'text' && (
-              <select value={textSize} onChange={(event) => setTextSize(Number(event.target.value))}>
+              <select value={activeTextBox?.autoFit ? 0 : (activeTextBox?.fontSize ?? textSize)} onChange={(event) => chooseTextSize(Number(event.target.value))}>
+                <option value={0}>Auto fit</option>
+                <option value={18}>18px</option>
                 {textSizes.map((size) => <option key={size} value={size}>{size}px</option>)}
               </select>
             )}
@@ -510,6 +715,57 @@ export default function DrawingBoard({
               onPointerCancel={pointerUp}
               onContextMenu={(event) => event.preventDefault()}
             />
+            {activeTextBox && (
+              <div
+                className="active-text-box"
+                style={{
+                  left: `${activeTextBox.x / WIDTH * 100}%`,
+                  top: `${activeTextBox.y / HEIGHT * 100}%`,
+                  width: `${activeTextBox.width / WIDTH * 100}%`,
+                  height: `${activeTextBox.height / HEIGHT * 100}%`,
+                  color: activeTextBox.colour,
+                  fontSize: `${activeTextBox.fontSize * canvasDisplayWidth / WIDTH}px`,
+                }}
+                onPointerMove={moveTextTransform}
+                onPointerUp={endTextTransform}
+                onPointerCancel={endTextTransform}
+              >
+                <button
+                  type="button"
+                  className="text-move-handle"
+                  aria-label="Move text box"
+                  title="Drag to move"
+                  onPointerDown={(event) => beginTextTransform(event, 'move')}
+                >
+                  Move
+                </button>
+                <textarea
+                  ref={textInputRef}
+                  aria-label="Text box content"
+                  value={activeTextBox.text}
+                  placeholder="Type here…"
+                  onChange={(event) => {
+                    const text = event.target.value
+                    setActiveTextBox((current) => {
+                      if (!current) return current
+                      const updated = { ...current, text }
+                      if (updated.autoFit) updated.fontSize = fittedFontSize(context()!, updated)
+                      return updated
+                    })
+                  }}
+                />
+                <i className="text-handle text-handle-nw" />
+                <i className="text-handle text-handle-ne" />
+                <i className="text-handle text-handle-sw" />
+                <button
+                  type="button"
+                  className="text-resize-handle"
+                  aria-label="Resize text box"
+                  title="Drag to resize"
+                  onPointerDown={(event) => beginTextTransform(event, 'resize')}
+                />
+              </div>
+            )}
             {effectiveLocked && <div className="canvas-lock">{submitted ? 'Submitted' : submitting ? 'Submitting…' : 'Time is up'}</div>}
           </div>
 
@@ -523,13 +779,13 @@ export default function DrawingBoard({
                   className={colour === value ? 'active' : ''}
                   style={{ background: value }}
                   aria-label={`Use colour ${value}`}
-                  onClick={() => setColour(value)}
+                  onClick={() => chooseColour(value)}
                   disabled={effectiveLocked}
                 />
               ))}
               <label className="custom-colour">
                 <span>Custom</span>
-                <input type="color" value={colour} onChange={(event) => setColour(event.target.value)} disabled={effectiveLocked} />
+                <input type="color" value={colour} onChange={(event) => chooseColour(event.target.value)} disabled={effectiveLocked} />
               </label>
             </div>
             <div className="desktop-submit-actions">
@@ -546,7 +802,7 @@ export default function DrawingBoard({
           <div className="compact-dock">
             {(['pen', 'eraser'] as DrawingTool[]).map(toolButton)}
             <label className="dock-colour" style={{ background: colour }} title="Colour">
-              <input type="color" value={colour} onChange={(event) => setColour(event.target.value)} />
+              <input type="color" value={colour} onChange={(event) => chooseColour(event.target.value)} />
               <small>Colour</small>
             </label>
             <button type="button" onClick={() => setThicknessIndex((thicknessIndex + 1) % 4)}>
@@ -575,25 +831,21 @@ export default function DrawingBoard({
 
       </div>
 
-      {textPoint && (
-        <div className="text-entry-backdrop" role="dialog" aria-modal="true" aria-label="Add text">
-          <form onSubmit={(event) => { event.preventDefault(); placeText() }}>
-            <label>Text<input autoFocus maxLength={80} value={textValue} onChange={(event) => setTextValue(event.target.value)} /></label>
-            <label>Size<select value={textSize} onChange={(event) => setTextSize(Number(event.target.value))}>
-              {textSizes.map((size) => <option key={size} value={size}>{size}px</option>)}
-            </select></label>
-            <div><button type="button" className="button button-secondary" onClick={() => setTextPoint(null)}>Cancel</button>
-              <button className="button button-primary">Place text</button></div>
-          </form>
-        </div>
-      )}
     </section>
   )
 }
 
-function toolIcon(tool: DrawingTool): string {
-  return {
-    pen: '✎', eraser: '▱', fill: '◩', eyedropper: '⌁',
-    line: '╱', rectangle: '□', ellipse: '○', text: 'T',
-  }[tool]
+function toolIcon(tool: DrawingTool) {
+  const icons: Record<DrawingTool, LucideIcon> = {
+    pen: Pencil,
+    eraser: Eraser,
+    fill: PaintBucket,
+    eyedropper: Pipette,
+    line: Slash,
+    rectangle: Square,
+    ellipse: Circle,
+    text: Type,
+  }
+  const Icon = icons[tool]
+  return <Icon size={28} strokeWidth={2.2} />
 }
