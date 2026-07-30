@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Opening Scribbledicks…</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var parts = window.location.pathname.split('/').filter(Boolean)
+        var repositoryBase = parts.length > 0 ? '/' + parts[0] : ''
+        var appRoute = window.location.pathname.slice(repositoryBase.length) || '/'
+        var destination = repositoryBase + '/?route=' + encodeURIComponent(appRoute)
+        window.location.replace(destination)
+      }())
+    </script>
+  </body>
+</html>
