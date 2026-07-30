@@ -51,6 +51,7 @@ export function PremierePlayer({
   const [error, setError] = useState('')
   const [soundBlocked, setSoundBlocked] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const playbackRef = useRef({ segmentStartMs: 0, audioStartMs: 0, premiereStartMs: 0 })
   const finishing = useRef(false)
 
   const load = useCallback(async () => {
@@ -64,8 +65,18 @@ export function PremierePlayer({
 
   useEffect(() => { void load() }, [load])
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 100)
-    return () => window.clearInterval(timer)
+    let frame = 0
+    let lastPaint = 0
+    const tick = () => {
+      const time = Date.now()
+      if (time - lastPaint >= 100) {
+        lastPaint = time
+        setNow(time)
+      }
+      frame = window.requestAnimationFrame(tick)
+    }
+    frame = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(frame)
   }, [])
 
   const elapsed = payload?.startedAt
@@ -86,22 +97,53 @@ export function PremierePlayer({
       audioRef.current?.pause()
       return
     }
-    const desiredSeconds = Math.max(0, (segmentElapsed - (segment.audioStartMs ?? 0)) / 1000)
-    let audio = audioRef.current
-    if (!audio || audio.dataset.panelId !== panel.panelId) {
-      audio?.pause()
-      audio = new Audio(panel.audioUrl)
-      audio.preload = 'auto'
-      audio.dataset.panelId = panel.panelId
-      audioRef.current = audio
+    audioRef.current?.pause()
+    const audio = new Audio(panel.audioUrl)
+    audio.preload = 'auto'
+    audio.dataset.panelId = panel.panelId
+    audioRef.current = audio
+    playbackRef.current = {
+      segmentStartMs: segment.startMs,
+      audioStartMs: segment.audioStartMs ?? 0,
+      premiereStartMs: new Date(payload?.startedAt ?? 0).getTime(),
     }
-    if (Math.abs(audio.currentTime - desiredSeconds) > .45) audio.currentTime = desiredSeconds
-    if (desiredSeconds < (panel.audioDurationMs ?? 0) / 1000) {
+    const synchronizeAndPlay = () => {
+      const timing = playbackRef.current
+      const desired = Math.max(0, (
+        Date.now() - timing.premiereStartMs - timing.segmentStartMs - timing.audioStartMs
+      ) / 1000)
+      if (desired >= (panel.audioDurationMs ?? 0) / 1000) return
+      if (Number.isFinite(audio.duration)) {
+        audio.currentTime = Math.min(desired, Math.max(0, audio.duration - .05))
+      } else {
+        audio.currentTime = desired
+      }
       void audio.play().then(() => setSoundBlocked(false)).catch(() => setSoundBlocked(true))
-    } else {
+    }
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) synchronizeAndPlay()
+    else audio.addEventListener('loadedmetadata', synchronizeAndPlay, { once: true })
+    return () => {
+      audio.removeEventListener('loadedmetadata', synchronizeAndPlay)
       audio.pause()
     }
-  }, [panel?.panelId, panel?.audioUrl, panel?.audioDurationMs, segment, segmentElapsed])
+  }, [panel?.panelId, panel?.audioUrl, panel?.audioDurationMs, payload?.startedAt, segment?.startMs, segment?.audioStartMs])
+
+  useEffect(() => {
+    const correction = window.setInterval(() => {
+      const audio = audioRef.current
+      if (!audio || audio.paused || audio.ended) return
+      const timing = playbackRef.current
+      const desired = Math.max(0, (
+        Date.now() - timing.premiereStartMs - timing.segmentStartMs - timing.audioStartMs
+      ) / 1000)
+      if (Math.abs(audio.currentTime - desired) > 1.2) {
+        audio.currentTime = Number.isFinite(audio.duration)
+          ? Math.min(desired, Math.max(0, audio.duration - .05))
+          : desired
+      }
+    }, 2000)
+    return () => window.clearInterval(correction)
+  }, [])
 
   useEffect(() => {
     if (!payload || elapsed < payload.totalDurationMs || finishing.current) return
@@ -114,9 +156,11 @@ export function PremierePlayer({
     const words = panel.narration.split(/\s+/)
     const audioElapsed = Math.max(0, segmentElapsed - (segment.audioStartMs ?? 0))
     const duration = panel.audioDurationMs ?? 1
+    if (audioElapsed >= duration) return ''
     const position = Math.min(words.length - 1, Math.floor(audioElapsed / duration * words.length))
-    const start = Math.max(0, Math.floor(position / 9) * 9)
-    return words.slice(start, start + 9).join(' ')
+    const wordsPerCue = 6
+    const start = Math.max(0, Math.floor(position / wordsPerCue) * wordsPerCue)
+    return words.slice(start, start + wordsPerCue).join(' ')
   }, [panel, segment, segmentElapsed])
 
   const enableSound = () => {
