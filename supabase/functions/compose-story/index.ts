@@ -109,7 +109,7 @@ const storySchema = {
               mainSubject: { type: 'string' },
               action: { type: 'string' },
               setting: { type: 'string' },
-              mustInclude: { type: 'array', items: { type: 'string' } },
+              mustInclude: { type: 'array', maxItems: 1, items: { type: 'string' } },
               compositionSuggestion: { type: ['string', 'null'] },
               fullPrompt: { type: 'string' },
             },
@@ -212,10 +212,13 @@ function validateStory(story: FinalStory, payload: StoryPayload): void {
       throw new Error(`Panel ${panel.panelNumber} was incomplete.`)
     }
     const promptWords = words(panel.drawingBrief.fullPrompt)
-    if (promptWords.length < 25 || promptWords.length > 70) {
-      throw new Error(`Panel ${panel.panelNumber} drawing prompt must contain 25–70 words.`)
+    if (promptWords.length < 10 || promptWords.length > 24) {
+      throw new Error(`Panel ${panel.panelNumber} drawing prompt must contain 10–24 words.`)
     }
     const promptLower = panel.drawingBrief.fullPrompt.toLocaleLowerCase()
+    if (!promptLower.startsWith('draw ')) {
+      throw new Error(`Panel ${panel.panelNumber} drawing prompt must begin with "Draw".`)
+    }
     if (dependencyPhrases.some((phrase) => promptLower.includes(phrase))) {
       throw new Error(`Panel ${panel.panelNumber} drawing prompt depends on another panel.`)
     }
@@ -346,13 +349,26 @@ lore, backstory, or an abstract emotional state.
 
 DRAWING BRIEFS
 The drawing player sees only fullPrompt and knows nothing about other panels, the entity bible, or
-the wider story. fullPrompt must therefore be a standalone 25–70 word amateur-friendly drawing
-instruction for one visible moment. Explicitly explain what every named subject physically is
-every time it appears. Repeat the stable visual description of recurring entities. Include the
-visible action, complete setting, and important objects. Never use unexplained pronouns, "the same
-character", "the object from before", "the previous location", or otherwise depend on another
-panel. Use concrete visible verbs such as standing, running, pointing, holding, driving, chasing,
-falling, opening, or exploding. compositionSuggestion is optional and simple; avoid camera jargon.
+the wider story. fullPrompt is not an image-generation prompt. It is a quick instruction for an
+ordinary person drawing with a mouse or phone in under 90 seconds.
+
+Write fullPrompt in 10–24 words. Ask for the minimum drawing needed for the scene and its central
+event to remain recognisable. Use one main subject, one clear visible action, one simple setting,
+and at most one important secondary detail. Include no more than three separately drawable people,
+creatures, or objects in total.
+
+Begin with "Draw". Remove decorative adjectives, colours, clothing, facial expressions,
+background objects, quantities, and composition directions unless one is essential to
+understanding the story. Do not ask for text labels unless the exact words are essential. Never
+say the drawing should be silly, funny, absurd, wacky, or comedic. Present the scene sincerely and
+let the player material create the humour.
+
+mainSubject, action, setting, the entity bible, and storyBeat may retain fuller internal production
+detail. fullPrompt alone must be abridged and immediately drawable. It must still stand alone:
+briefly identify a named subject's physical type, never refer to another panel, and never use an
+unexplained pronoun. Use a concrete verb such as standing, running, pointing, holding, driving,
+chasing, falling, opening, or exploding. mustInclude contains zero or one genuinely essential
+detail. compositionSuggestion should normally be null.
 storyBeat is private planning text and narrationDraft is eventual spoken narration.${correction}`,
             },
             { role: 'user', content: JSON.stringify(payload) },
