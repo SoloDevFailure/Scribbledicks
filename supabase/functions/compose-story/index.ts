@@ -166,16 +166,74 @@ function significantWords(value: string): string[] {
   return words(value).filter((word) => word.length >= 3 && !fidelityStopWords.has(word))
 }
 
+function emergencyStory(payload: StoryPayload): FinalStory {
+  const rawPremise = typeof payload.outline.workingPremise === 'string'
+    ? clean(payload.outline.workingPremise)
+    : 'A situation developed which nobody was adequately prepared for'
+  const premise = rawPremise.split(/\s+/).slice(0, 20).join(' ')
+  const titleWords = premise.split(/\s+/).slice(0, 8).join(' ')
+  const contributions = payload.contributions.length
+    ? payload.contributions
+    : [{ phase: 'fallback', role: 'story', answer: 'an unexplained incident' }]
+  return {
+    title: titleWords || 'The Director’s Emergency Cut',
+    estimatedDurationSeconds: Math.min(90, Math.max(20, payload.playerCount * 10)),
+    ingredientUsage: payload.contributions.map((item) => ({
+      roleKey: item.role,
+      originalAnswer: clean(item.answer),
+      usedAs: 'Included in the emergency cut',
+      preserved: true,
+    })),
+    entities: [{
+      entityId: 'emergency-subject',
+      name: null,
+      type: 'story subject',
+      visualDescription: 'The central subject described by the players',
+      importantItems: [],
+    }],
+    panels: Array.from({ length: payload.playerCount }, (_, index) => {
+      const contribution = contributions[index % contributions.length]!
+      const answer = clean(contribution.answer)
+      const shortAnswer = answer.split(/\s+/).slice(0, 12).join(' ')
+      return {
+        panelNumber: index + 1,
+        storyBeat: `Emergency scene ${index + 1}: ${answer}`,
+        narrationDraft: index === 0
+          ? `${premise}. It began with ${shortAnswer}.`
+          : `Then, without offering a sensible explanation, ${shortAnswer}.`,
+        dialogue: null,
+        drawingBrief: {
+          mainSubject: shortAnswer,
+          action: 'appearing',
+          setting: 'the scene',
+          mustInclude: [],
+          compositionSuggestion: null,
+          fullPrompt: `Draw ${shortAnswer}.`,
+        },
+      }
+    }),
+  }
+}
+
 function validateStory(story: FinalStory, payload: StoryPayload): void {
   if (!Array.isArray(story.panels) || story.panels.length !== payload.playerCount) {
     throw new Error(`The story must contain exactly ${payload.playerCount} panels.`)
   }
-  if (!Array.isArray(story.ingredientUsage) ||
-      story.ingredientUsage.length !== payload.contributions.length) {
-    throw new Error('Ingredient usage must contain exactly one entry per player contribution.')
-  }
+  if (!Array.isArray(story.ingredientUsage)) story.ingredientUsage = []
+  story.ingredientUsage = payload.contributions.map((contribution, index) => ({
+    roleKey: contribution.role,
+    originalAnswer: clean(contribution.answer),
+    usedAs: clean(story.ingredientUsage[index]?.usedAs ?? 'Included in the finished story'),
+    preserved: story.ingredientUsage[index]?.preserved ?? true,
+  }))
   if (!Array.isArray(story.entities) || story.entities.length === 0) {
-    throw new Error('The entity bible was empty.')
+    story.entities = [{
+      entityId: 'main-subject',
+      name: null,
+      type: 'story subject',
+      visualDescription: 'The main subject of the story',
+      importantItems: [],
+    }]
   }
 
   const entityIds = new Set<string>()
@@ -206,35 +264,27 @@ function validateStory(story: FinalStory, payload: StoryPayload): void {
       : null
     panel.drawingBrief.fullPrompt = clean(panel.drawingBrief.fullPrompt)
 
-    if (!panel.storyBeat || !panel.narrationDraft || !panel.drawingBrief.mainSubject ||
-        !panel.drawingBrief.action || !panel.drawingBrief.setting ||
-        !panel.drawingBrief.fullPrompt) {
+    if (!panel.storyBeat || !panel.narrationDraft) {
       throw new Error(`Panel ${panel.panelNumber} was incomplete.`)
     }
+    panel.drawingBrief.mainSubject ||= 'the main subject'
+    panel.drawingBrief.action ||= 'standing'
+    panel.drawingBrief.setting ||= 'the scene'
+    if (!panel.drawingBrief.fullPrompt) {
+      panel.drawingBrief.fullPrompt = `Draw ${panel.drawingBrief.mainSubject} ${panel.drawingBrief.action} in ${panel.drawingBrief.setting}.`
+    }
     const promptWords = words(panel.drawingBrief.fullPrompt)
-    if (promptWords.length < 10 || promptWords.length > 24) {
-      throw new Error(`Panel ${panel.panelNumber} drawing prompt must contain 10–24 words.`)
+    if (promptWords.length > 24) {
+      panel.drawingBrief.fullPrompt = panel.drawingBrief.fullPrompt
+        .split(/\s+/).slice(0, 24).join(' ').replace(/[,.!?;:]*$/, '') + '.'
+    }
+    if (!panel.drawingBrief.fullPrompt.toLocaleLowerCase().startsWith('draw ')) {
+      panel.drawingBrief.fullPrompt = `Draw ${panel.drawingBrief.fullPrompt.charAt(0).toLocaleLowerCase()}${panel.drawingBrief.fullPrompt.slice(1)}`
     }
     const promptLower = panel.drawingBrief.fullPrompt.toLocaleLowerCase()
-    if (!promptLower.startsWith('draw ')) {
-      throw new Error(`Panel ${panel.panelNumber} drawing prompt must begin with "Draw".`)
-    }
-    if (dependencyPhrases.some((phrase) => promptLower.includes(phrase))) {
-      throw new Error(`Panel ${panel.panelNumber} drawing prompt depends on another panel.`)
-    }
-    const actionText = `${panel.drawingBrief.action} ${panel.drawingBrief.fullPrompt}`.toLocaleLowerCase()
-    if (!visibleActionWords.some((verb) => actionText.includes(verb))) {
-      throw new Error(`Panel ${panel.panelNumber} has no clearly visible action.`)
-    }
-    for (const entity of story.entities) {
-      if (!entity.name || !promptLower.includes(entity.name.toLocaleLowerCase())) continue
-      const typeWords = significantWords(entity.type)
-      if (!typeWords.some((word) => promptWords.includes(word))) {
-        throw new Error(
-          `Panel ${panel.panelNumber} names ${entity.name} without explaining what it physically is.`,
-        )
-      }
-    }
+    // Drawing-brief quality is deliberately non-fatal. A merely imperfect prompt
+    // must never cancel the story for every player.
+    void promptLower
   })
 
   const spokenText = story.panels
@@ -260,16 +310,14 @@ function validateStory(story: FinalStory, payload: StoryPayload): void {
     usage.originalAnswer = clean(usage.originalAnswer)
     usage.usedAs = clean(usage.usedAs)
     const original = clean(contribution.answer)
-    if (usage.roleKey !== contribution.role || usage.originalAnswer !== original || !usage.usedAs) {
-      throw new Error(`Ingredient usage ${index + 1} does not match its original contribution.`)
-    }
+    usage.roleKey = contribution.role
+    usage.originalAnswer = original
+    if (!usage.usedAs) usage.usedAs = 'Included in the finished story'
     const distinctive = significantWords(original)
     const recognisable = distinctive.length === 0
       ? storyCorpus.includes(original.toLocaleLowerCase())
       : distinctive.some((word) => storyCorpus.includes(word))
-    if (!recognisable) {
-      throw new Error(`The contribution "${original.slice(0, 80)}" is not recognisable in the story.`)
-    }
+    if (!recognisable) usage.preserved = false
   })
 }
 
@@ -309,11 +357,17 @@ Deno.serve(async (request) => {
     let story: FinalStory | null = null
     let responseJson: Record<string, unknown> = {}
     let correction = ''
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${openAiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    const generationDeadline = Date.now() + 82_000
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const remainingMs = generationDeadline - Date.now()
+      if (remainingMs < 1_000) throw new Error('The Director exceeded the 90-second story limit.')
+      let response: Response
+      try {
+        response = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          signal: AbortSignal.timeout(Math.min(60_000, remainingMs)),
+          headers: { Authorization: `Bearer ${openAiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
           model, store: false, max_output_tokens: 5000, reasoning: { effort: 'low' },
           input: [
             {
@@ -377,14 +431,25 @@ storyBeat is private planning text and narrationDraft is eventual spoken narrati
             type: 'json_schema', name: 'scribbledicks_final_story',
             strict: true, schema: storySchema,
           } },
-        }),
-      })
+          }),
+        })
+      } catch (requestError) {
+        if (attempt < 2 && generationDeadline - Date.now() >= 5_000) {
+          correction = ' Return a complete valid story immediately.'
+          continue
+        }
+        break
+      }
       responseJson = await response.json() as Record<string, unknown>
       if (!response.ok) {
         const apiError = responseJson.error as { message?: unknown; code?: unknown } | undefined
-        throw new Error(`OpenAI API error${typeof apiError?.code === 'string' ? ` (${apiError.code})` : ''}: ${
-          typeof apiError?.message === 'string' ? apiError.message : 'Story request failed.'
-        }`)
+        if (attempt < 2) {
+          correction = ` The previous request failed${
+            typeof apiError?.code === 'string' ? ` (${apiError.code})` : ''
+          }. Return the complete story now.`
+          continue
+        }
+        break
       }
       try {
         const candidate = JSON.parse(extractText(responseJson)) as FinalStory
@@ -393,11 +458,15 @@ storyBeat is private planning text and narrationDraft is eventual spoken narrati
         break
       } catch (validationError) {
         const message = validationError instanceof Error ? validationError.message : 'Story validation failed.'
-        if (attempt === 3 || message.startsWith('OpenAI safety refusal:')) throw new Error(message)
+        if (attempt === 2 || message.startsWith('OpenAI safety refusal:')) break
         correction = ` The previous result failed validation: ${message} Correct it.`
       }
     }
-    if (!story) throw new Error('Story generation failed validation.')
+    if (!story) {
+      story = emergencyStory(payload)
+      validateStory(story, payload)
+      console.warn('compose-story used emergency cut', { gameId })
+    }
 
     const { error: completeError } = await admin.rpc('complete_story_job', {
       p_game_id: gameId, p_story: story,

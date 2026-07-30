@@ -10,7 +10,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 function wavDurationMs(bytes: ArrayBuffer): number {
   const view = new DataView(bytes)
-  const byteRate = view.getUint32(28, true)
+  let byteRate = 0
+  let dataOffset = 0
+  let declaredDataSize = 0
   let offset = 12
   while (offset + 8 <= view.byteLength) {
     const id = String.fromCharCode(
@@ -18,10 +20,27 @@ function wavDurationMs(bytes: ArrayBuffer): number {
       view.getUint8(offset + 2), view.getUint8(offset + 3),
     )
     const size = view.getUint32(offset + 4, true)
-    if (id === 'data') return Math.max(1, Math.round(size / byteRate * 1000))
+    if (id === 'fmt ' && size >= 16 && offset + 20 <= view.byteLength) {
+      byteRate = view.getUint32(offset + 16, true)
+    }
+    if (id === 'data') {
+      dataOffset = offset + 8
+      declaredDataSize = size
+      break
+    }
     offset += 8 + size + (size % 2)
   }
-  throw new Error('INVALID_NARRATION_AUDIO')
+  if (!byteRate || !dataOffset) throw new Error('INVALID_NARRATION_AUDIO')
+  const availableDataSize = Math.max(0, view.byteLength - dataOffset)
+  // Streaming WAV responses may use 0xffffffff as an unknown-length sentinel.
+  const usableDataSize = declaredDataSize > availableDataSize
+    ? availableDataSize
+    : declaredDataSize
+  const duration = Math.round(usableDataSize / byteRate * 1000)
+  if (!Number.isFinite(duration) || duration < 100 || duration > 180_000) {
+    throw new Error('INVALID_NARRATION_DURATION')
+  }
+  return duration
 }
 
 function motions(panelNumber: number, durationMs: number) {
