@@ -460,11 +460,12 @@ function GameScreen({
   useEffect(() => setAnswer(game.answerText ?? ''), [game.answerText])
 
   useEffect(() => {
-    if (game.phase !== 'opening_questions' && game.phase !== 'followup_questions') return
+    const questionPhase = game.phase === 'opening_questions' || game.phase === 'followup_questions'
+    if (!questionPhase && game.phase !== 'composing_story') return
     const update = () => {
       const seconds = secondsRemaining(game.phaseDeadlineAt)
       setRemaining(seconds)
-      if (seconds === 0) {
+      if (seconds === 0 && questionPhase) {
         void checkGameProgress(session, game.gameId)
           .then(onRefresh)
           .catch(() => onRefresh())
@@ -718,6 +719,13 @@ function GameScreen({
           <>
             <p>{composingStory ? 'Turning everyone’s contributions into scenes, dialogue, and drawing instructions.' : 'Everyone’s answers are locked in. This usually takes a moment.'}</p>
             <div className="loading-dots" aria-label={composingStory ? 'Composing story' : 'Composing outline'}><i /><i /><i /></div>
+            {composingStory && game.phaseDeadlineAt && (
+              <div className="director-deadline" aria-label={`${remaining} seconds remaining`}>
+                <span>The Director has 90 seconds to make this coherent</span>
+                <strong>{remaining}s</strong>
+                <i><b style={{ width: `${Math.max(0, Math.min(100, remaining / 90 * 100))}%` }} /></i>
+              </div>
+            )}
           </>
         )}
       </section>
