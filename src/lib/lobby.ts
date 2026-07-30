@@ -146,6 +146,45 @@ export async function submitDrawing(
   if (error) throw error
 }
 
+export async function preparePremiere(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().functions.invoke('prepare-premiere', {
+    body: { gameId, playerToken: session.playerToken },
+  })
+  if (error) throw error
+}
+
+export async function fetchPremiereState(session: Session, gameId: string): Promise<unknown> {
+  const { data, error } = await requireClient().functions.invoke('premiere-state', {
+    body: { gameId, playerToken: session.playerToken },
+  })
+  if (error) throw error
+  return data
+}
+
+export async function finishPremiere(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('finish_premiere', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+}
+
+export async function skipPremiereToCredits(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('skip_premiere_to_credits', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+}
+
+export async function replayToLobby(session: Session, gameId: string): Promise<void> {
+  const { error } = await requireClient().rpc('replay_to_lobby', {
+    p_game_id: gameId,
+    p_player_token: session.playerToken,
+  })
+  if (error) throw error
+}
+
 export async function checkGameProgress(session: Session, gameId: string): Promise<void> {
   const { error } = await requireClient().rpc('check_game_progress', {
     p_game_id: gameId,
@@ -242,5 +281,7 @@ export function friendlyError(error: unknown): string {
   }
   if (message.includes('DRAWING_ASSIGNMENT_NOT_FOUND')) return 'This drawing assignment could not be verified.'
   if (message.includes('INVALID_DRAWING')) return 'The drawing could not be submitted in the required PNG format.'
+  if (message.includes('PREMIERE_NOT_READY')) return 'The Premiere is still being prepared.'
+  if (message.includes('PREMIERE')) return 'The Premiere could not be prepared. The host can try again.'
   return message || 'Something went wrong. Please try again.'
 }

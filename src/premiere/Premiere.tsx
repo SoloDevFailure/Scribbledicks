@@ -1,0 +1,200 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  fetchPremiereState, finishPremiere, friendlyError, replayToLobby, skipPremiereToCredits,
+} from '../lib/lobby'
+import type { Session } from '../types'
+
+interface PremierePanel {
+  panelId: string
+  panelNumber: number
+  narration: string
+  dialogue: string | null
+  drawingStatus: 'submitted' | 'blank' | 'missing' | 'failed'
+  artistUsername: string
+  drawingUrl: string | null
+  audioUrl: string | null
+  audioDurationMs: number | null
+}
+interface Shot { startMs: number; endMs: number; motion: string }
+interface TimelineSegment {
+  type: 'title' | 'panel' | 'credits'
+  startMs: number
+  durationMs: number
+  panelId?: string
+  audioStartMs?: number
+  shots?: Shot[]
+}
+interface PremierePayload {
+  title: string
+  phase: string
+  startedAt: string | null
+  endsAt: string | null
+  totalDurationMs: number
+  timeline: { version: number; segments: TimelineSegment[]; music: null }
+  players: string[]
+  panels: PremierePanel[]
+}
+
+export function PremierePlayer({
+  session,
+  gameId,
+  onRefresh,
+  onLeave,
+}: {
+  session: Session
+  gameId: string
+  onRefresh: () => Promise<void>
+  onLeave: () => Promise<void>
+}) {
+  const [payload, setPayload] = useState<PremierePayload | null>(null)
+  const [now, setNow] = useState(Date.now())
+  const [error, setError] = useState('')
+  const [soundBlocked, setSoundBlocked] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const finishing = useRef(false)
+
+  const load = useCallback(async () => {
+    try {
+      setPayload(await fetchPremiereState(session, gameId) as PremierePayload)
+      setError('')
+    } catch (loadError) {
+      setError(friendlyError(loadError))
+    }
+  }, [gameId, session])
+
+  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 100)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const elapsed = payload?.startedAt
+    ? Math.max(0, Math.min(payload.totalDurationMs, now - new Date(payload.startedAt).getTime()))
+    : 0
+  const segment = payload?.timeline?.segments.find((item) =>
+    elapsed >= item.startMs && elapsed < item.startMs + item.durationMs)
+    ?? payload?.timeline?.segments.at(-1)
+  const panel = segment?.panelId
+    ? payload?.panels.find((item) => item.panelId === segment.panelId) ?? null
+    : null
+  const segmentElapsed = segment ? elapsed - segment.startMs : 0
+  const shot = segment?.shots?.find((item) =>
+    segmentElapsed >= item.startMs && segmentElapsed < item.endMs) ?? segment?.shots?.at(-1)
+
+  useEffect(() => {
+    if (!panel?.audioUrl || !segment) {
+      audioRef.current?.pause()
+      return
+    }
+    const desiredSeconds = Math.max(0, (segmentElapsed - (segment.audioStartMs ?? 0)) / 1000)
+    let audio = audioRef.current
+    if (!audio || audio.dataset.panelId !== panel.panelId) {
+      audio?.pause()
+      audio = new Audio(panel.audioUrl)
+      audio.preload = 'auto'
+      audio.dataset.panelId = panel.panelId
+      audioRef.current = audio
+    }
+    if (Math.abs(audio.currentTime - desiredSeconds) > .45) audio.currentTime = desiredSeconds
+    if (desiredSeconds < (panel.audioDurationMs ?? 0) / 1000) {
+      void audio.play().then(() => setSoundBlocked(false)).catch(() => setSoundBlocked(true))
+    } else {
+      audio.pause()
+    }
+  }, [panel?.panelId, panel?.audioUrl, panel?.audioDurationMs, segment, segmentElapsed])
+
+  useEffect(() => {
+    if (!payload || elapsed < payload.totalDurationMs || finishing.current) return
+    finishing.current = true
+    void finishPremiere(session, gameId).then(onRefresh).catch(() => undefined)
+  }, [elapsed, gameId, onRefresh, payload, session])
+
+  const subtitle = useMemo(() => {
+    if (!panel || !segment) return ''
+    const words = panel.narration.split(/\s+/)
+    const audioElapsed = Math.max(0, segmentElapsed - (segment.audioStartMs ?? 0))
+    const duration = panel.audioDurationMs ?? 1
+    const position = Math.min(words.length - 1, Math.floor(audioElapsed / duration * words.length))
+    const start = Math.max(0, Math.floor(position / 9) * 9)
+    return words.slice(start, start + 9).join(' ')
+  }, [panel, segment, segmentElapsed])
+
+  const enableSound = () => {
+    setSoundBlocked(false)
+    if (audioRef.current) void audioRef.current.play().catch(() => setSoundBlocked(true))
+  }
+  const skipToCredits = async () => {
+    try {
+      await skipPremiereToCredits(session, gameId)
+      await load()
+      await onRefresh()
+    } catch (skipError) {
+      setError(friendlyError(skipError))
+    }
+  }
+
+  if (!payload) return <div className="premiere-screen premiere-loading"><div className="loader" /><p>Threading the projector…</p>{error && <p>{error}</p>}</div>
+  if (payload.phase === 'game_complete' || elapsed >= payload.totalDurationMs) {
+    return (
+      <div className="premiere-screen post-credits">
+        <span>The End</span>
+        <h1>{payload.title}</h1>
+        <p>Against all reasonable expectations, that was a movie.</p>
+        {session.isHost
+          ? <div className="post-credit-actions">
+              <button className="button button-primary" onClick={() => void replayToLobby(session, gameId).then(onRefresh)}>Play again</button>
+              <button className="button button-secondary" onClick={() => void onLeave()}>Return to start</button>
+            </div>
+          : <p>Waiting for the host to gather the survivors.</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="premiere-screen">
+      {segment?.type === 'title' && (
+        <section className="premiere-title-card" key="title">
+          <span>A Scribbledicks picture</span><h1>{payload.title}</h1>
+        </section>
+      )}
+      {segment?.type === 'panel' && panel && (
+        <section className="premiere-panel" key={panel.panelId}>
+          {panel.drawingUrl ? (
+            <img
+              key={`${panel.panelId}-${shot?.motion}`}
+              className={`premiere-art motion-${shot?.motion ?? 'zoom-in'}`}
+              src={panel.drawingUrl}
+              alt={`Panel ${panel.panelNumber}, drawn by ${panel.artistUsername}`}
+            />
+          ) : (
+            <div className="missing-art"><span>Scene unavailable</span><strong>The artist has left this to your imagination.</strong></div>
+          )}
+          <div className="film-vignette" />
+          {subtitle && <div className="premiere-subtitle">{subtitle}</div>}
+          {panel.dialogue && segmentElapsed > segment.durationMs * .55 && (
+            <blockquote className="premiere-dialogue">“{panel.dialogue}”</blockquote>
+          )}
+        </section>
+      )}
+      {segment?.type === 'credits' && (
+        <section className="premiere-credits">
+          <div style={{ animationDuration: `${segment.durationMs}ms` }}>
+            <h1>{payload.title}</h1>
+            <h2>Written by</h2>
+            {payload.players.map((name) => <p key={`writer-${name}`}>{name}</p>)}
+            <h2>Artwork by</h2>
+            {payload.players.map((name) => <p key={`artist-${name}`}>{name}</p>)}
+            <h2>Directed by</h2><p>Artificial Intelligence</p>
+            <strong>A Scribbledicks Production</strong>
+          </div>
+        </section>
+      )}
+      {soundBlocked && <button className="sound-gate" onClick={enableSound}>Tap for sound</button>}
+      {session.isHost && segment?.type === 'panel' && (
+        <button className="premiere-skip" onClick={() => void skipToCredits()}>Skip to credits</button>
+      )}
+      {error && <div className="premiere-error">{error}</div>}
+      <div className="premiere-progress"><i style={{ width: `${elapsed / payload.totalDurationMs * 100}%` }} /></div>
+    </div>
+  )
+}

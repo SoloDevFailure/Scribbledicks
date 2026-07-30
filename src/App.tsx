@@ -14,6 +14,7 @@ import {
   leaveRoom,
   requestOutline,
   requestStory,
+  preparePremiere,
   retryOutline,
   retryStory,
   startRoom,
@@ -23,6 +24,7 @@ import {
 } from './lib/lobby'
 import DrawingBoard from './drawing/DrawingBoard'
 import type { DrawingLayout, DrawingSubmission } from './drawing/types'
+import { PremierePlayer } from './premiere/Premiere'
 import { clearSession, loadSession, saveSession } from './lib/session'
 import { isSupabaseConfigured, supabase, supabaseConfigError } from './lib/supabase'
 import type { GameState, Player, Room, Session } from './types'
@@ -249,6 +251,8 @@ function Lobby({ session, onExit }: { session: Session; onExit: () => void }) {
           }
           if (nextRoom.status === 'started') {
             setGame(await fetchGameState(session))
+          } else {
+            setGame(null)
           }
           setError('')
         } catch (refreshError) {
@@ -451,6 +455,7 @@ function GameScreen({
   const [localError, setLocalError] = useState('')
   const [drawingLayout, setDrawingLayout] = useState<DrawingLayout>(() =>
     (localStorage.getItem('scribbledicks:drawing-layout') as DrawingLayout | null) ?? 'auto')
+  const [preparingPremiere, setPreparingPremiere] = useState(false)
 
   useEffect(() => setAnswer(game.answerText ?? ''), [game.answerText])
 
@@ -617,12 +622,68 @@ function GameScreen({
   }
 
   if (game.phase === 'drawing_complete') {
+    const beginPremiere = async () => {
+      setPreparingPremiere(true)
+      setLocalError('')
+      try {
+        await preparePremiere(session, game.gameId)
+        await onRefresh()
+      } catch (premiereError) {
+        setLocalError(friendlyError(premiereError))
+      } finally {
+        setPreparingPremiere(false)
+      }
+    }
     return (
       <section className="card game-card drawing-waiting-stage">
         {hostControls}
         <span className="eyebrow">Every masterpiece is ready</span>
         <h2>The storyboard is complete.</h2>
-        <p>The Premiere is the next stage. No drawings are revealed early.</p>
+        <p>The projector is ready. No drawings are revealed until the film begins.</p>
+        {localError && <p className="error-message" role="alert">{localError}</p>}
+        {game.isHost ? (
+          <button className="button button-primary" disabled={preparingPremiere} onClick={() => void beginPremiere()}>
+            {preparingPremiere ? 'Preparing narration…' : 'Start Premiere'}
+          </button>
+        ) : (
+          <div className="waiting-message"><i /><span>Waiting for the host…</span></div>
+        )}
+      </section>
+    )
+  }
+
+  if (game.phase === 'premiere_preparing' || game.phase === 'premiere_ready') {
+    return (
+      <section className="card game-card loading-stage">
+        {hostControls}
+        <div className="film-reel" aria-hidden="true">✦</div>
+        <span className="eyebrow">Please silence all mobile telephones</span>
+        <h2>The narrator is clearing their throat…</h2>
+        <p>Recording the voice-over and threading everyone’s masterpiece into one film.</p>
+        <div className="loading-dots" aria-label="Preparing Premiere"><i /><i /><i /></div>
+      </section>
+    )
+  }
+
+  if (game.phase === 'premiere_playing' || game.phase === 'game_complete') {
+    return (
+      <PremierePlayer
+        key={`${game.phase}-${game.phaseStartedAt}`}
+        session={session}
+        gameId={game.gameId}
+        onRefresh={onRefresh}
+        onLeave={onLeave}
+      />
+    )
+  }
+
+  if (game.phase === 'premiere_error') {
+    return (
+      <section className="card game-card error-stage">
+        {hostControls}
+        <span className="eyebrow">Projection booth incident</span>
+        <h2>The Premiere could not be prepared.</h2>
+        <p>The host can reset the game while we blame the projector.</p>
       </section>
     )
   }

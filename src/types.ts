@@ -36,6 +36,11 @@ export type GamePhase =
   | 'drawing'
   | 'drawing_complete'
   | 'drawing_error'
+  | 'premiere_preparing'
+  | 'premiere_ready'
+  | 'premiere_playing'
+  | 'game_complete'
+  | 'premiere_error'
   | 'error'
 
 export interface StoryPanel {

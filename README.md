@@ -67,7 +67,9 @@ Run migrations `202607290004_hard_reset.sql`,
 `202607290006_followups_and_story.sql` afterward, in filename order. Then run
 `202607300007_drawing_stage.sql` to add the private multiplayer drawing phase,
 stable panel assignments, the 90-second shared deadline, and the private
-`game-drawings` Storage bucket.
+`game-drawings` Storage bucket. Finally run `202607300008_premiere.sql` to add
+private narration clips, the synchronized Premiere timeline, playback phases,
+credits, and replay-to-lobby support.
 
 ## Outline Edge Function
 
@@ -81,6 +83,8 @@ supabase secrets set OPENAI_API_KEY=your-key OPENAI_MODEL=gpt-5-mini
 supabase functions deploy compose-outline --no-verify-jwt
 supabase functions deploy compose-story --no-verify-jwt
 supabase functions deploy submit-drawing --no-verify-jwt
+supabase functions deploy prepare-premiere --no-verify-jwt
+supabase functions deploy premiere-state --no-verify-jwt
 ```
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied automatically inside
@@ -109,6 +113,27 @@ upload. Ten seconds later the server marks any still-unresolved assignments as
 stored and marked `blank`. The service-only `get_premiere_panels(game_id)` RPC
 returns panels in chronological order with narration, drawing brief, drawing
 status/path, and artist details for the future Premiere implementation.
+
+## Premiere
+
+Migration 008 creates a second private bucket named `premiere-audio`. When the
+host selects **Start Premiere**, `prepare-premiere` generates one WAV narration
+clip per panel through OpenAI's Speech API, measures its exact duration, stores
+it privately, builds the title/panel/credits timeline, and sets one shared
+server start time. It defaults to `tts-1-hd` with the `onyx` voice. Override
+those defaults with the Edge Function secrets `OPENAI_TTS_MODEL` and
+`OPENAI_TTS_VOICE` if desired.
+
+`premiere-state` validates the custom player token and returns short-lived
+signed drawing and audio URLs. Playback position is derived from
+`premiere_started_at`, so refreshes and reconnects rejoin the current panel and
+audio position. Browser autoplay rules may require a player to tap **Tap for
+sound** once on their device.
+
+If one narration clip fails, the timeline still completes using an estimated
+silent duration and synchronized subtitles for that panel. Missing drawings
+use a themed placeholder. The host may skip to credits, and after the film can
+return all existing players to the lobby for another game.
 
 ## Gameplay smoke test
 

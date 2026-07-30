@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.submit-drawing]
 verify_jwt = false
+
+[functions.prepare-premiere]
+verify_jwt = false
+
+[functions.premiere-state]
+verify_jwt = false
