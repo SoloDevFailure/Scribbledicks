@@ -456,6 +456,11 @@ export default function DrawingBoard({
       </header>
 
       <div className="drawing-workspace">
+        <div className="desktop-brief-bar">
+          <span className="drawing-kicker">Your scene</span>
+          <p>{prompt}</p>
+        </div>
+
         <aside className="drawing-tools" aria-label="Drawing tools">
           {(['pen', 'eraser', 'fill', 'eyedropper', 'line', 'rectangle', 'ellipse', 'text'] as DrawingTool[])
             .map(toolButton)}
@@ -508,23 +513,34 @@ export default function DrawingBoard({
             {effectiveLocked && <div className="canvas-lock">{submitted ? 'Submitted' : submitting ? 'Submitting…' : 'Time is up'}</div>}
           </div>
 
-          <div className="colour-palette" aria-label="Colour palette">
-            <span className="current-colour" style={{ background: colour }} title="Current colour" />
-            {colours.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={colour === value ? 'active' : ''}
-                style={{ background: value }}
-                aria-label={`Use colour ${value}`}
-                onClick={() => setColour(value)}
-                disabled={effectiveLocked}
-              />
-            ))}
-            <label className="custom-colour">
-              <span>Custom</span>
-              <input type="color" value={colour} onChange={(event) => setColour(event.target.value)} disabled={effectiveLocked} />
-            </label>
+          <div className="desktop-bottom-controls">
+            <div className="colour-palette" aria-label="Colour palette">
+              <span className="current-colour" style={{ background: colour }} title="Current colour" />
+              {colours.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={colour === value ? 'active' : ''}
+                  style={{ background: value }}
+                  aria-label={`Use colour ${value}`}
+                  onClick={() => setColour(value)}
+                  disabled={effectiveLocked}
+                />
+              ))}
+              <label className="custom-colour">
+                <span>Custom</span>
+                <input type="color" value={colour} onChange={(event) => setColour(event.target.value)} disabled={effectiveLocked} />
+              </label>
+            </div>
+            <div className="desktop-submit-actions">
+              {error && <p className="error-message" role="alert">{error}</p>}
+              {submitted
+                ? <div className="drawing-success"><strong>Drawing submitted</strong><span>Waiting for the other artists.</span></div>
+                : <button type="button" className="button button-primary" onClick={() => void submit()} disabled={submitting}>
+                    {submitting ? 'Submitting…' : submitLabel}
+                  </button>}
+              <button type="button" className="button button-secondary" onClick={exportPng}>Export PNG</button>
+            </div>
           </div>
 
           <div className="compact-dock">
@@ -557,24 +573,6 @@ export default function DrawingBoard({
           </div>
         </main>
 
-        <aside className="drawing-brief">
-          <button type="button" className="brief-toggle" onClick={() => setBriefOpen(!briefOpen)}>
-            {briefOpen ? 'Hide brief' : 'Show brief'}
-          </button>
-          {briefOpen && <>
-            <span className="drawing-kicker">Your scene</span>
-            <p>{prompt}</p>
-          </>}
-          <div className="drawing-actions">
-            {error && <p className="error-message" role="alert">{error}</p>}
-            {submitted
-              ? <div className="drawing-success"><strong>Drawing submitted</strong><span>Waiting for the other artists.</span></div>
-              : <button type="button" className="button button-primary" onClick={() => void submit()} disabled={submitting}>
-                  {submitting ? 'Submitting…' : submitLabel}
-                </button>}
-            <button type="button" className="button button-secondary" onClick={exportPng}>Export PNG</button>
-          </div>
-        </aside>
       </div>
 
       {textPoint && (
