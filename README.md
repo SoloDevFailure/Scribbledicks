@@ -151,6 +151,10 @@ restores every drawing to chronological panel order.
 Run `supabase/migrations/202607310010_multiple_drawing_rounds.sql` after
 migration 009 before testing this flow.
 
+Run `supabase/migrations/202607310011_drawing_intermission.sql` afterward. It
+adds the shared five-second intermission between drawing rounds. The deadline
+is server-authoritative but intentionally not shown numerically to players.
+
 ## Gameplay smoke test
 
 After applying migration 003 to a development project, run
