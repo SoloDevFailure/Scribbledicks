@@ -171,6 +171,12 @@ function significantWords(value: string): string[] {
   return words(value).filter((word) => word.length >= 3 && !fidelityStopWords.has(word))
 }
 
+function isSpecificNamedSubject(value: string): boolean {
+  const subject = clean(value)
+  const generic = /^(a|an|the)?\s*(man|woman|person|boy|girl|character|hero|villain|creature|animal|figure|someone|something)$/i
+  return !generic.test(subject) && /\b[A-Z][\p{L}'-]*(?:\s+[A-Z][\p{L}'-]*)*\b/u.test(subject)
+}
+
 function emergencyStory(payload: StoryPayload): FinalStory {
   const rawPremise = typeof payload.outline.workingPremise === 'string'
     ? clean(payload.outline.workingPremise)
@@ -284,6 +290,11 @@ function validateStory(story: FinalStory, payload: StoryPayload): void {
     panel.drawingBrief.action ||= 'standing'
     panel.drawingBrief.setting ||= 'the scene'
     if (!panel.drawingBrief.fullPrompt) {
+      panel.drawingBrief.fullPrompt = `Draw ${panel.drawingBrief.mainSubject} ${panel.drawingBrief.action} in ${panel.drawingBrief.setting}.`
+    }
+    if (isSpecificNamedSubject(panel.drawingBrief.mainSubject) &&
+        !panel.drawingBrief.fullPrompt.toLocaleLowerCase()
+          .includes(panel.drawingBrief.mainSubject.toLocaleLowerCase())) {
       panel.drawingBrief.fullPrompt = `Draw ${panel.drawingBrief.mainSubject} ${panel.drawingBrief.action} in ${panel.drawingBrief.setting}.`
     }
     const promptWords = words(panel.drawingBrief.fullPrompt)
@@ -404,6 +415,15 @@ reinterpret when literal use would make the story incoherent or is required for 
 player-written dialogue where it fits. ingredientUsage must contain one entry per contribution in
 the supplied order, copying role to roleKey and answer to originalAnswer exactly.
 
+PROPER NAMES AND IDENTITIES
+Use exact names whenever a player supplies or clearly invokes one. This includes real historical
+figures, living public figures, politicians, celebrities, fictional characters, brands, places,
+and player-created names. Hitler remains Hitler, Batman remains Batman, Donald Trump remains
+Donald Trump, and Leather Whip Larry remains Leather Whip Larry. Do not anonymise them as "a man",
+"a politician", "a hero", "a famous person", or another generic substitute. Controversial or
+unpleasant identities may still be named plainly. Simplify how many things must be drawn, never
+the identity of the person or object that makes the scene specific.
+
 ENTITY BIBLE
 Record every recurring character, creature, important object, and important location. Give each a
 stable ID, its name when applicable, what it physically is, a concise repeatable visual
@@ -440,10 +460,17 @@ understanding the story. Do not ask for text labels unless the exact words are e
 say the drawing should be silly, funny, absurd, wacky, or comedic. Present the scene sincerely and
 let the player material create the humour.
 
+Always retain exact proper names, brands, fictional characters, public figures, distinctive
+player-created names, and signature objects in fullPrompt when they appear in that scene. A prompt
+such as "Draw Hitler chasing Batman through McDonald's" is preferable to "Draw a man chasing
+another man through a restaurant." Well-known named subjects do not need a generic physical type
+added after their name.
+
 mainSubject, action, setting, the entity bible, and storyBeat may retain fuller internal production
 detail. fullPrompt alone must be abridged and immediately drawable. It must still stand alone:
-briefly identify a named subject's physical type, never refer to another panel, and never use an
-unexplained pronoun. Use a concrete verb such as standing, running, pointing, holding, driving,
+use exact names; add a short physical type only for an obscure original character when genuinely
+helpful; never refer to another panel; and never use an unexplained pronoun. Use a concrete verb
+such as standing, running, pointing, holding, driving,
 chasing, falling, opening, or exploding. mustInclude contains zero or one genuinely essential
 detail. compositionSuggestion should normally be null.
 storyBeat is private planning text and narrationDraft is eventual spoken narration.${correction}`,
