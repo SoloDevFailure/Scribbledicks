@@ -135,6 +135,22 @@ silent duration and synchronized subtitles for that panel. Missing drawings
 use a themed placeholder. The host may skip to credits, and after the film can
 return all existing players to the lobby for another game.
 
+## Drawing rounds and cinematic panels
+
+Games with 3, 4, or 5 players generate two panels per player and run two
+separate 90-second drawing rounds. Games with 6 or more players generate one
+panel per player and use one drawing round. Each round has one private,
+persisted assignment per player. The second-round mapping is shifted away from
+the player's first panel so players do not draw consecutive scenes.
+
+Story generation assigns a basic cinematic shot type to every panel:
+establishing, wide, medium, close-up, hero, or reaction. The artist sees that
+short framing label with the simplified drawing prompt. Premiere always
+restores every drawing to chronological panel order.
+
+Run `supabase/migrations/202607310010_multiple_drawing_rounds.sql` after
+migration 009 before testing this flow.
+
 ## Gameplay smoke test
 
 After applying migration 003 to a development project, run

@@ -29,6 +29,7 @@ export interface DrawingBoardProps {
   layout?: DrawingLayout
   storageKey?: string
   submitLabel?: string
+  roundLabel?: string
   onLayoutChange?: (layout: DrawingLayout) => void
   onSubmit: (submission: DrawingSubmission) => Promise<void>
 }

@@ -126,10 +126,10 @@ Deno.serve(async (request) => {
     for (let index = 0; index < panels.length; index++) {
       const panel = panels[index]
       const clip = clips[index]
-      const durationMs = Math.max(5000, clip.durationMs + 1200)
+      const durationMs = Math.max(5000, clip.durationMs + 2000)
       segments.push({
         type: 'panel', startMs: cursor, durationMs, panelId: panel.panelId,
-        panelNumber: panel.panelNumber, audioStartMs: 500,
+        panelNumber: panel.panelNumber, audioStartMs: 1200,
         shots: motions(Number(panel.panelNumber), durationMs),
       })
       cursor += durationMs

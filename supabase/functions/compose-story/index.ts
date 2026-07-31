@@ -32,6 +32,7 @@ interface DrawingBrief {
   setting: string
   mustInclude: string[]
   compositionSuggestion: string | null
+  shotType: 'establishing' | 'wide' | 'medium' | 'close-up' | 'hero' | 'reaction'
   fullPrompt: string
 }
 
@@ -103,7 +104,7 @@ const storySchema = {
             additionalProperties: false,
             required: [
               'mainSubject', 'action', 'setting', 'mustInclude',
-              'compositionSuggestion', 'fullPrompt',
+              'compositionSuggestion', 'shotType', 'fullPrompt',
             ],
             properties: {
               mainSubject: { type: 'string' },
@@ -111,6 +112,10 @@ const storySchema = {
               setting: { type: 'string' },
               mustInclude: { type: 'array', maxItems: 1, items: { type: 'string' } },
               compositionSuggestion: { type: ['string', 'null'] },
+              shotType: {
+                type: 'string',
+                enum: ['establishing', 'wide', 'medium', 'close-up', 'hero', 'reaction'],
+              },
               fullPrompt: { type: 'string' },
             },
           },
@@ -191,7 +196,9 @@ function emergencyStory(payload: StoryPayload): FinalStory {
       visualDescription: 'The central subject described by the players',
       importantItems: [],
     }],
-    panels: Array.from({ length: payload.playerCount }, (_, index) => {
+    panels: Array.from({
+      length: payload.playerCount <= 5 ? payload.playerCount * 2 : payload.playerCount,
+    }, (_, index) => {
       const contribution = contributions[index % contributions.length]!
       const answer = clean(contribution.answer)
       const shortAnswer = answer.split(/\s+/).slice(0, 12).join(' ')
@@ -208,6 +215,7 @@ function emergencyStory(payload: StoryPayload): FinalStory {
           setting: 'the scene',
           mustInclude: [],
           compositionSuggestion: null,
+          shotType: (['establishing', 'wide', 'medium', 'close-up', 'hero', 'reaction'] as const)[index % 6],
           fullPrompt: `Draw ${shortAnswer}.`,
         },
       }
@@ -216,8 +224,9 @@ function emergencyStory(payload: StoryPayload): FinalStory {
 }
 
 function validateStory(story: FinalStory, payload: StoryPayload): void {
-  if (!Array.isArray(story.panels) || story.panels.length !== payload.playerCount) {
-    throw new Error(`The story must contain exactly ${payload.playerCount} panels.`)
+  const requiredPanelCount = payload.playerCount <= 5 ? payload.playerCount * 2 : payload.playerCount
+  if (!Array.isArray(story.panels) || story.panels.length !== requiredPanelCount) {
+    throw new Error(`The story must contain exactly ${requiredPanelCount} panels.`)
   }
   if (!Array.isArray(story.ingredientUsage)) story.ingredientUsage = []
   story.ingredientUsage = payload.contributions.map((contribution, index) => ({
@@ -262,6 +271,10 @@ function validateStory(story: FinalStory, payload: StoryPayload): void {
     panel.drawingBrief.compositionSuggestion = panel.drawingBrief.compositionSuggestion
       ? clean(panel.drawingBrief.compositionSuggestion)
       : null
+    if (!['establishing', 'wide', 'medium', 'close-up', 'hero', 'reaction']
+      .includes(panel.drawingBrief.shotType)) {
+      panel.drawingBrief.shotType = 'medium'
+    }
     panel.drawingBrief.fullPrompt = clean(panel.drawingBrief.fullPrompt)
 
     if (!panel.storyBeat || !panel.narrationDraft) {
@@ -353,6 +366,7 @@ Deno.serve(async (request) => {
     if (!data) return Response.json({ status: 'already_claimed' }, { status: 202, headers: corsHeaders })
     claimedJob = true
     const payload = data as StoryPayload
+    const requiredPanelCount = payload.playerCount <= 5 ? payload.playerCount * 2 : payload.playerCount
 
     let story: FinalStory | null = null
     let responseJson: Record<string, unknown> = {}
@@ -373,7 +387,7 @@ Deno.serve(async (request) => {
             {
               role: 'system',
               content: `Build one causal, chronological story for a narrated video no longer than
-90 seconds. Use at most 195 spoken words and exactly one drawable scene per player.
+90 seconds. Use at most 195 spoken words and exactly ${requiredPanelCount} drawable scenes.
 
 First construct the private entities bible and ingredientUsage, then design the scene sequence.
 Do not map one answer to one panel. Combine all contributions into an opening situation, inciting
@@ -400,6 +414,15 @@ Each panel is one distinct still-image moment with an identifiable subject, visi
 specific location, and visible story development. Put thoughts, motives, history, symbolism, and
 consequences in narrationDraft—not in the drawing brief. Never make a panel merely atmosphere,
 lore, backstory, or an abstract emotional state.
+
+VISUAL GRAMMAR
+Plan the panels as a tiny film, not a sequence of identical compositions. Assign every panel one
+simple shotType: establishing, wide, medium, close-up, hero, or reaction. Use an establishing or
+wide shot early to locate the story, medium/action shots for events, and close-up, hero, or
+reaction shots for important characters and payoffs. Vary adjacent shot types and avoid repeating
+the same framing more than twice in succession. The chosen framing must simplify the drawing:
+close-ups and hero shots should contain fewer subjects, while establishing and wide shots may show
+the setting with only the essential action.
 
 DRAWING BRIEFS
 The drawing player sees only fullPrompt and knows nothing about other panels, the entity bible, or

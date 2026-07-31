@@ -90,6 +90,8 @@ export interface GameState {
   assignmentId: string | null
   drawingPanelId: string | null
   drawingStatus: 'assigned' | 'submitted' | 'blank' | 'missing' | 'failed' | null
+  drawingRoundNumber: number
+  drawingRoundCount: number
   promptText: string | null
   submittedAt: string | null
   answerText: string | null

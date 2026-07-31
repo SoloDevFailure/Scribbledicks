@@ -107,11 +107,18 @@ export function PremierePlayer({
       audioStartMs: segment.audioStartMs ?? 0,
       premiereStartMs: new Date(payload?.startedAt ?? 0).getTime(),
     }
+    let startTimer = 0
     const synchronizeAndPlay = () => {
       const timing = playbackRef.current
-      const desired = Math.max(0, (
+      const rawDesired = (
         Date.now() - timing.premiereStartMs - timing.segmentStartMs - timing.audioStartMs
-      ) / 1000)
+      ) / 1000
+      if (rawDesired < 0) {
+        window.clearTimeout(startTimer)
+        startTimer = window.setTimeout(synchronizeAndPlay, Math.ceil(-rawDesired * 1000) + 10)
+        return
+      }
+      const desired = rawDesired
       if (desired >= (panel.audioDurationMs ?? 0) / 1000) return
       if (Number.isFinite(audio.duration)) {
         audio.currentTime = Math.min(desired, Math.max(0, audio.duration - .05))
@@ -123,6 +130,7 @@ export function PremierePlayer({
     if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) synchronizeAndPlay()
     else audio.addEventListener('loadedmetadata', synchronizeAndPlay, { once: true })
     return () => {
+      window.clearTimeout(startTimer)
       audio.removeEventListener('loadedmetadata', synchronizeAndPlay)
       audio.pause()
     }

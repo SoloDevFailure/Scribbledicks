@@ -132,6 +132,7 @@ export default function DrawingBoard({
   layout = 'auto',
   storageKey,
   submitLabel = 'Submit drawing',
+  roundLabel,
   onLayoutChange,
   onSubmit,
 }: DrawingBoardProps) {
@@ -669,7 +670,7 @@ export default function DrawingBoard({
     <section className={`drawing-board ${layoutClass}`}>
       <header className="drawing-statusbar">
         <div>
-          <span className="drawing-kicker">Storyboard studio</span>
+          <span className="drawing-kicker">{roundLabel ?? 'Storyboard studio'}</span>
           <strong>{submitted ? 'Drawing locked' : `${artistsFinished} of ${artistCount} artists finished`}</strong>
         </div>
         <div className={`drawing-timer ${timerEnabled && seconds <= 15 ? 'warning' : ''}`}>
