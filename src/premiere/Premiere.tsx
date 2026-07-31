@@ -34,6 +34,7 @@ interface PremierePayload {
   players: string[]
   panels: PremierePanel[]
 }
+const RETURN_TO_MENU_ON_LOAD = 'scribbledicks:return-to-menu-on-load'
 
 export function PremierePlayer({
   session,
@@ -159,6 +160,11 @@ export function PremierePlayer({
     void finishPremiere(session, gameId).then(onRefresh).catch(() => undefined)
   }, [elapsed, gameId, onRefresh, payload, session])
 
+  useEffect(() => {
+    if (!payload || (payload.phase !== 'game_complete' && elapsed < payload.totalDurationMs)) return
+    localStorage.setItem(RETURN_TO_MENU_ON_LOAD, 'true')
+  }, [elapsed, payload])
+
   const subtitle = useMemo(() => {
     if (!panel || !segment) return ''
     const words = panel.narration.split(/\s+/)
@@ -184,6 +190,19 @@ export function PremierePlayer({
       setError(friendlyError(skipError))
     }
   }
+  const playAgain = async () => {
+    try {
+      await replayToLobby(session, gameId)
+      localStorage.removeItem(RETURN_TO_MENU_ON_LOAD)
+      await onRefresh()
+    } catch (replayError) {
+      setError(friendlyError(replayError))
+    }
+  }
+  const returnToMenu = async () => {
+    localStorage.removeItem(RETURN_TO_MENU_ON_LOAD)
+    await onLeave()
+  }
 
   if (!payload) return <div className="premiere-screen premiere-loading"><div className="loader" /><p>Threading the projector…</p>{error && <p>{error}</p>}</div>
   if (payload.phase === 'game_complete' || elapsed >= payload.totalDurationMs) {
@@ -194,10 +213,13 @@ export function PremierePlayer({
         <p>Against all reasonable expectations, that was a movie.</p>
         {session.isHost
           ? <div className="post-credit-actions">
-              <button className="button button-primary" onClick={() => void replayToLobby(session, gameId).then(onRefresh)}>Play again</button>
-              <button className="button button-secondary" onClick={() => void onLeave()}>Return to start</button>
+              <button className="button button-primary" onClick={() => void playAgain()}>Play again</button>
+              <button className="button button-secondary" onClick={() => void returnToMenu()}>Return to menu</button>
             </div>
-          : <p>Waiting for the host to gather the survivors.</p>}
+          : <div className="post-credit-actions">
+              <p>Waiting for the host to gather the survivors.</p>
+              <button className="button button-secondary" onClick={() => void returnToMenu()}>Return to menu</button>
+            </div>}
       </div>
     )
   }

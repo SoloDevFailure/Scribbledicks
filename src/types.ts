@@ -34,6 +34,7 @@ export type GamePhase =
   | 'composing_story'
   | 'story_complete'
   | 'drawing'
+  | 'drawing_intermission'
   | 'drawing_complete'
   | 'drawing_error'
   | 'premiere_preparing'

@@ -673,7 +673,9 @@ export default function DrawingBoard({
           <span className="drawing-kicker">{roundLabel ?? 'Storyboard studio'}</span>
           <strong>{submitted ? 'Drawing locked' : `${artistsFinished} of ${artistCount} artists finished`}</strong>
         </div>
-        <div className={`drawing-timer ${timerEnabled && seconds <= 15 ? 'warning' : ''}`}>
+        <div className={`drawing-timer ${
+          timerEnabled && seconds <= 5 ? 'critical' : timerEnabled && seconds <= 15 ? 'warning' : ''
+        }`}>
           {timerEnabled ? `${seconds}s` : 'Timer off'}
         </div>
         {onLayoutChange && (

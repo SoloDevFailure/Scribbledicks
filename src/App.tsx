@@ -31,10 +31,18 @@ import type { GameState, Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-const APP_BUILD = '2026.07.31.1'
+const APP_BUILD = '2026.07.31.2'
+const RETURN_TO_MENU_ON_LOAD = 'scribbledicks:return-to-menu-on-load'
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(() => loadSession())
+  const [session, setSession] = useState<Session | null>(() => {
+    if (localStorage.getItem(RETURN_TO_MENU_ON_LOAD) === 'true') {
+      localStorage.removeItem(RETURN_TO_MENU_ON_LOAD)
+      clearSession()
+      return null
+    }
+    return loadSession()
+  })
 
   const enterLobby = useCallback((next: Session) => {
     saveSession(next)
@@ -453,8 +461,7 @@ function GameScreen({
   const [resetting, setResetting] = useState(false)
   const [remaining, setRemaining] = useState(() => secondsRemaining(game.phaseDeadlineAt))
   const [localError, setLocalError] = useState('')
-  const [drawingLayout, setDrawingLayout] = useState<DrawingLayout>(() =>
-    (localStorage.getItem('scribbledicks:drawing-layout') as DrawingLayout | null) ?? 'auto')
+  const drawingLayout: DrawingLayout = 'auto'
   const [preparingPremiere, setPreparingPremiere] = useState(false)
 
   useEffect(() => setAnswer(game.answerText ?? ''), [game.answerText])
@@ -474,6 +481,15 @@ function GameScreen({
     update()
     const timer = window.setInterval(update, 500)
     return () => window.clearInterval(timer)
+  }, [game.gameId, game.phase, game.phaseDeadlineAt, onRefresh, session])
+
+  useEffect(() => {
+    if (game.phase !== 'drawing_intermission') return
+    const delay = Math.max(0, new Date(game.phaseDeadlineAt ?? 0).getTime() - Date.now())
+    const timer = window.setTimeout(() => {
+      void checkGameProgress(session, game.gameId).then(onRefresh).catch(() => onRefresh())
+    }, delay + 100)
+    return () => window.clearTimeout(timer)
   }, [game.gameId, game.phase, game.phaseDeadlineAt, onRefresh, session])
 
   const submit = async (event: FormEvent) => {
@@ -565,15 +581,23 @@ function GameScreen({
 
   const shownError = localError || error
 
-  const changeDrawingLayout = (next: DrawingLayout) => {
-    setDrawingLayout(next)
-    localStorage.setItem('scribbledicks:drawing-layout', next)
-  }
-
   const uploadDrawing = async (submission: DrawingSubmission) => {
     if (!game.assignmentId) throw new Error('Your drawing assignment could not be restored.')
     await submitDrawing(session, game.gameId, game.assignmentId, submission)
     await onRefresh()
+  }
+
+  if (game.phase === 'drawing_intermission') {
+    return (
+      <section className="card game-card drawing-intermission">
+        {hostControls}
+        <div className="intermission-pencil" aria-hidden="true">✎</div>
+        <span className="eyebrow">A brief artistic emergency</span>
+        <h2>Additional drawing is necessary.</h2>
+        <p>The Director has reviewed the evidence and requires one more scene from everyone.</p>
+        <div className="loading-dots" aria-label="Preparing the next drawing"><i /><i /><i /></div>
+      </section>
+    )
   }
 
   if (game.phase === 'drawing') {
@@ -619,7 +643,6 @@ function GameScreen({
             : 'Storyboard studio'}
           layout={drawingLayout}
           storageKey={`scribbledicks:drawing:${game.gameId}:${game.assignmentId}`}
-          onLayoutChange={changeDrawingLayout}
           onSubmit={uploadDrawing}
         />
       </div>
@@ -724,7 +747,7 @@ function GameScreen({
             <p>{composingStory ? 'Turning everyone’s contributions into scenes, dialogue, and drawing instructions.' : 'Everyone’s answers are locked in. This usually takes a moment.'}</p>
             <div className="loading-dots" aria-label={composingStory ? 'Composing story' : 'Composing outline'}><i /><i /><i /></div>
             {composingStory && game.phaseDeadlineAt && (
-              <div className="director-deadline" aria-label={`${remaining} seconds remaining`}>
+              <div className={`director-deadline ${remaining <= 5 ? 'critical' : ''}`} aria-label={`${remaining} seconds remaining`}>
                 <span>The Director has 90 seconds to make this coherent</span>
                 <strong>{remaining}s</strong>
                 <i><b style={{ width: `${Math.max(0, Math.min(100, remaining / 90 * 100))}%` }} /></i>
@@ -801,7 +824,9 @@ function GameScreen({
       {hostControls}
       <div className="question-topbar">
         <span className="status status-connected"><i /> {followup ? 'Just need some specifics' : 'Private question'}</span>
-        <span className={`countdown ${remaining <= 10 ? 'countdown-urgent' : ''}`}>{remaining}s</span>
+        <span className={`countdown ${
+          remaining <= 5 ? 'countdown-critical' : remaining <= 10 ? 'countdown-urgent' : ''
+        }`}>{remaining}s</span>
       </div>
       <div className="progress-track" aria-label={`${game.answerCount} of ${game.playerCount} answered`}>
         <i style={{ width: `${(game.answerCount / game.playerCount) * 100}%` }} />
