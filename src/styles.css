@@ -642,30 +642,28 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 }
 .premiere-title-card span { color:#d1cbd6; font:700 .7rem/1.2 Inter,system-ui,sans-serif; letter-spacing:.28em; text-transform:uppercase; }
 .premiere-title-card h1,.post-credits h1 { max-width:1000px; margin:0; font-size:clamp(2.5rem,8vw,7rem); line-height:.94; text-wrap:balance; }
-.premiere-panel { position:absolute; inset:0; overflow:hidden; background:#050507; animation:panel-dissolve .8s ease both; }
-.premiere-art {
-  position:absolute; inset:-2%; width:104%; height:104%; object-fit:cover;
-  transform-origin:center; will-change:transform; animation-duration:4s; animation-timing-function:linear; animation-fill-mode:both;
+.premiere-panel {
+  position:absolute; inset:0; overflow:hidden; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:clamp(10px,2vh,22px); padding:clamp(12px,3vh,32px) clamp(10px,3vw,40px);
+  background:#000; animation:premiere-panel-fade linear both;
 }
-.motion-zoom-in { animation-name:motion-zoom-in; }
-.motion-zoom-out { animation-name:motion-zoom-out; }
-.motion-pan-left { animation-name:motion-pan-left; }
-.motion-pan-right { animation-name:motion-pan-right; }
-.motion-drift-up { animation-name:motion-drift-up; }
-.motion-drift-down { animation-name:motion-drift-down; }
-@keyframes motion-zoom-in { from{transform:scale(1.01);opacity:.82} 16%{opacity:1} to{transform:scale(1.14);opacity:1} }
-@keyframes motion-zoom-out { from{transform:scale(1.14);opacity:.82} 16%{opacity:1} to{transform:scale(1.02);opacity:1} }
-@keyframes motion-pan-left { from{transform:scale(1.1) translateX(2.5%);opacity:.82} 16%{opacity:1} to{transform:scale(1.1) translateX(-2.5%);opacity:1} }
-@keyframes motion-pan-right { from{transform:scale(1.1) translateX(-2.5%);opacity:.82} 16%{opacity:1} to{transform:scale(1.1) translateX(2.5%);opacity:1} }
-@keyframes motion-drift-up { from{transform:scale(1.1) translateY(2.2%);opacity:.82} 16%{opacity:1} to{transform:scale(1.1) translateY(-2.2%);opacity:1} }
-@keyframes motion-drift-down { from{transform:scale(1.1) translateY(-2.2%);opacity:.82} 16%{opacity:1} to{transform:scale(1.1) translateY(2.2%);opacity:1} }
+.premiere-picture-frame {
+  position:relative; width:min(94vw,calc((100vh - 145px) * 16 / 9)); aspect-ratio:16/9;
+  overflow:hidden; flex:0 1 auto; border:clamp(3px,.45vw,7px) solid #000; background:#000;
+  box-shadow:0 0 0 1px #252525,0 18px 50px rgba(0,0,0,.7);
+  transform-origin:center; will-change:transform; animation:premiere-gentle-zoom linear both;
+}
+.premiere-art {
+  display:block; width:100%; height:100%; object-fit:contain; background:#000;
+}
+@keyframes premiere-gentle-zoom { from{transform:scale(1)} to{transform:scale(1.015)} }
+@keyframes premiere-panel-fade { 0%{opacity:0} 9%{opacity:1} 91%{opacity:1} 100%{opacity:0} }
 @keyframes panel-dissolve { from{opacity:0} to{opacity:1} }
 @keyframes cinema-fade { 0%,100%{opacity:0} 18%,82%{opacity:1} }
-.film-vignette { position:absolute; inset:0; pointer-events:none; box-shadow:inset 0 0 14vw 3vw rgba(0,0,0,.52); }
 .premiere-subtitle {
-  position:absolute; z-index:3; left:50%; bottom:7%; width:min(92%,1000px); transform:translateX(-50%);
-  padding:8px 14px; color:#fff; font:800 clamp(1.15rem,2.4vw,2.1rem)/1.25 Inter,system-ui,sans-serif;
-  text-align:center; text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 3px 8px #000;
+  position:relative; z-index:3; width:min(94vw,1100px); min-height:1.4em;
+  color:#fff; font:800 clamp(1rem,2.1vw,1.8rem)/1.3 Inter,system-ui,sans-serif;
+  text-align:center;
 }
 .premiere-dialogue {
   position:absolute; z-index:4; right:5%; top:8%; max-width:min(42%,550px); margin:0; padding:12px 18px;
@@ -696,5 +694,6 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
 .post-credit-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-top:22px; }
 @media (max-width:700px) {
   .premiere-dialogue { top:5%; right:4%; max-width:70%; }
-  .premiere-subtitle { bottom:9%; }
+  .premiere-panel { gap:10px; padding:12px 8px 18px; }
+  .premiere-picture-frame { width:min(96vw,calc((100vh - 105px) * 16 / 9)); }
 }

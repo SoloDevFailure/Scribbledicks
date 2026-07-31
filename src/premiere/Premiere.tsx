@@ -90,9 +90,6 @@ export function PremierePlayer({
     ? payload?.panels.find((item) => item.panelId === segment.panelId) ?? null
     : null
   const segmentElapsed = segment ? elapsed - segment.startMs : 0
-  const shot = segment?.shots?.find((item) =>
-    segmentElapsed >= item.startMs && segmentElapsed < item.endMs) ?? segment?.shots?.at(-1)
-
   useEffect(() => {
     if (!panel?.audioUrl || !segment) {
       audioRef.current?.pause()
@@ -232,19 +229,24 @@ export function PremierePlayer({
         </section>
       )}
       {segment?.type === 'panel' && panel && (
-        <section className="premiere-panel" key={panel.panelId}>
-          {panel.drawingUrl ? (
-            <img
-              key={`${panel.panelId}-${shot?.motion}`}
-              className={`premiere-art motion-${shot?.motion ?? 'zoom-in'}`}
-              src={panel.drawingUrl}
-              alt={`Panel ${panel.panelNumber}, drawn by ${panel.artistUsername}`}
-            />
-          ) : (
-            <div className="missing-art"><span>Scene unavailable</span><strong>The artist has left this to your imagination.</strong></div>
-          )}
-          <div className="film-vignette" />
-          {subtitle && <div className="premiere-subtitle">{subtitle}</div>}
+        <section
+          className="premiere-panel"
+          key={panel.panelId}
+          style={{ animationDuration: `${segment.durationMs}ms` }}
+        >
+          <div className="premiere-picture-frame" style={{ animationDuration: `${segment.durationMs}ms` }}>
+            {panel.drawingUrl ? (
+              <img
+                key={panel.panelId}
+                className="premiere-art"
+                src={panel.drawingUrl}
+                alt={`Panel ${panel.panelNumber}, drawn by ${panel.artistUsername}`}
+              />
+            ) : (
+              <div className="missing-art"><span>Scene unavailable</span><strong>The artist has left this to your imagination.</strong></div>
+            )}
+          </div>
+          <div className="premiere-subtitle" aria-live="polite">{subtitle || '\u00a0'}</div>
           {panel.dialogue && segmentElapsed > segment.durationMs * .55 && (
             <blockquote className="premiere-dialogue">“{panel.dialogue}”</blockquote>
           )}
