@@ -683,6 +683,14 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
   position:fixed; z-index:120; right:18px; top:18px; min-height:48px; padding:10px 18px;
   border:2px solid #fff; border-radius:999px; background:#ed536e; color:#fff; font-weight:900;
 }
+.premiere-media-check {
+  position:fixed; z-index:122; left:50%; top:18px; transform:translateX(-50%);
+  max-width:min(90vw,520px); padding:9px 14px; border:1px solid #6d6972; border-radius:999px;
+  background:rgba(8,8,10,.9); color:#fff; font:800 .78rem/1.2 Inter,system-ui,sans-serif;
+  box-shadow:0 5px 20px rgba(0,0,0,.4);
+}
+.premiere-media-failed { display:flex; align-items:center; gap:10px; border-color:#ed536e; border-radius:10px; }
+.premiere-media-failed button { padding:6px 9px; border:0; border-radius:7px; background:#ed536e; color:#fff; font-weight:900; }
 .premiere-skip {
   position:fixed; z-index:120; left:18px; top:18px; min-height:38px; padding:8px 12px;
   border:1px solid #aaa; border-radius:8px; background:rgba(0,0,0,.55); color:#ddd; font-weight:800;
@@ -696,4 +704,5 @@ textarea:focus { border-color: #201d2b; box-shadow: 3px 3px 0 #f6e96b; }
   .premiere-dialogue { top:5%; right:4%; max-width:70%; }
   .premiere-panel { gap:10px; padding:12px 8px 18px; }
   .premiere-picture-frame { width:min(96vw,calc((100vh - 105px) * 16 / 9)); }
+  .premiere-media-check { top:auto; bottom:16px; }
 }

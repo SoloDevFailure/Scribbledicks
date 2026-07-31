@@ -51,6 +51,7 @@ export function PremierePlayer({
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState('')
   const [soundBlocked, setSoundBlocked] = useState(false)
+  const [artworkCheck, setArtworkCheck] = useState({ total: 0, loaded: 0, failed: [] as string[], checking: false })
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const playbackRef = useRef({ segmentStartMs: 0, audioStartMs: 0, premiereStartMs: 0 })
   const finishing = useRef(false)
@@ -65,6 +66,33 @@ export function PremierePlayer({
   }, [gameId, session])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!payload) return
+    const artwork = payload.panels.filter((item) => item.drawingUrl)
+    let cancelled = false
+    setArtworkCheck({ total: artwork.length, loaded: 0, failed: [], checking: artwork.length > 0 })
+    if (artwork.length === 0) return
+    let loaded = 0
+    const failed: string[] = []
+    const checks = artwork.map((item) => new Promise<void>((resolve) => {
+      const image = new Image()
+      image.onload = () => {
+        loaded += 1
+        if (!cancelled) setArtworkCheck({ total: artwork.length, loaded, failed: [...failed], checking: true })
+        resolve()
+      }
+      image.onerror = () => {
+        failed.push(item.panelId)
+        if (!cancelled) setArtworkCheck({ total: artwork.length, loaded, failed: [...failed], checking: true })
+        resolve()
+      }
+      image.src = item.drawingUrl!
+    }))
+    void Promise.all(checks).then(() => {
+      if (!cancelled) setArtworkCheck({ total: artwork.length, loaded, failed, checking: false })
+    })
+    return () => { cancelled = true }
+  }, [payload])
   useEffect(() => {
     let frame = 0
     let lastPaint = 0
@@ -178,6 +206,10 @@ export function PremierePlayer({
     setSoundBlocked(false)
     if (audioRef.current) void audioRef.current.play().catch(() => setSoundBlocked(true))
   }
+  const retryArtwork = () => {
+    setArtworkCheck((current) => ({ ...current, checking: true, failed: [] }))
+    void load()
+  }
   const skipToCredits = async () => {
     try {
       await skipPremiereToCredits(session, gameId)
@@ -235,7 +267,7 @@ export function PremierePlayer({
           style={{ animationDuration: `${segment.durationMs}ms` }}
         >
           <div className="premiere-picture-frame" style={{ animationDuration: `${segment.durationMs}ms` }}>
-            {panel.drawingUrl ? (
+            {panel.drawingUrl && !artworkCheck.failed.includes(panel.panelId) ? (
               <img
                 key={panel.panelId}
                 className="premiere-art"
@@ -266,6 +298,17 @@ export function PremierePlayer({
         </section>
       )}
       {soundBlocked && <button className="sound-gate" onClick={enableSound}>Tap for sound</button>}
+      {artworkCheck.checking && (
+        <div className="premiere-media-check" role="status">
+          Checking artwork {artworkCheck.loaded} of {artworkCheck.total}…
+        </div>
+      )}
+      {!artworkCheck.checking && artworkCheck.failed.length > 0 && (
+        <div className="premiere-media-check premiere-media-failed" role="alert">
+          <span>{artworkCheck.failed.length} picture{artworkCheck.failed.length === 1 ? '' : 's'} could not load.</span>
+          <button type="button" onClick={retryArtwork}>Retry pictures</button>
+        </div>
+      )}
       {session.isHost && segment?.type === 'panel' && (
         <button className="premiere-skip" onClick={() => void skipToCredits()}>Skip to credits</button>
       )}

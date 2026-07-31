@@ -31,7 +31,7 @@ import type { GameState, Player, Room, Session } from './types'
 
 type LandingMode = 'home' | 'create' | 'join'
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-const APP_BUILD = '2026.07.31.5'
+const APP_BUILD = '2026.07.31.6'
 const RETURN_TO_MENU_ON_LOAD = 'scribbledicks:return-to-menu-on-load'
 
 export default function App() {
