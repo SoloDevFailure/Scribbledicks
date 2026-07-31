@@ -72,7 +72,7 @@ interface TextTransform {
 }
 
 function remainingSeconds(deadlineAt: string | null): number {
-  if (!deadlineAt) return 90
+  if (!deadlineAt) return 120
   return Math.max(0, Math.ceil((new Date(deadlineAt).getTime() - Date.now()) / 1000))
 }
 

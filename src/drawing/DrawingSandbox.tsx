@@ -12,7 +12,7 @@ export default function DrawingSandbox() {
   const [result, setResult] = useState('Ready—nothing leaves this browser.')
   const [submissionMode, setSubmissionMode] = useState<'success' | 'failure'>('success')
   const deadlineAt = useMemo(
-    () => timerEnabled ? new Date(Date.now() + 90_000).toISOString() : null,
+    () => timerEnabled ? new Date(Date.now() + 120_000).toISOString() : null,
     [timerEnabled, timerRun],
   )
 
@@ -44,7 +44,7 @@ export default function DrawingSandbox() {
             checked={timerEnabled}
             onChange={(event) => { setTimerEnabled(event.target.checked); setTimerRun((value) => value + 1) }}
           />
-          90-second timer
+          120-second timer
         </label>
         <label>Submission
           <select value={submissionMode} onChange={(event) => setSubmissionMode(event.target.value as 'success' | 'failure')}>
